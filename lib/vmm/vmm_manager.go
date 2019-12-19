@@ -174,6 +174,13 @@ func (vmmMgr *VmmManager) WaitKill() error {
 
 
 func (vmmMgr *VmmManager) Create(name string, vmmType VmmType) error {
+  //need to create a templated VM..
+
+  //get storage back end
+
+  //get linux bridge
+
+
   return nil
 }
 
