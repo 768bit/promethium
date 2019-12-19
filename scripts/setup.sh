@@ -55,13 +55,13 @@ mkdir -p "$CARGO_HOME"
 mkdir "$TMP_BUILD_DIR"
 cd "$TMP_BUILD_DIR"
 curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
-./bin/rustup target add aarch64-unknown-linux-gnu
-./bin/rustup target add aarch64-unknown-linux-gnu
-./bin/rustup component add rustfmt
-./bin/rustup component add clippy-preview
-./bin/cargo install -v cargo-kcov
-./bin/cargo install -v cargo-audit
-./bin/cargo kcov --print-install-kcov-sh | sh
+$RUSTUP_HOME/bin/rustup target add aarch64-unknown-linux-gnu
+$RUSTUP_HOME/bin/rustup target add aarch64-unknown-linux-gnu
+$RUSTUP_HOME/bin/rustup component add rustfmt
+$RUSTUP_HOME/bin/rustup component add clippy-preview
+$RUSTUP_HOME/bin/cargo install -v cargo-kcov
+$RUSTUP_HOME/bin/cargo install -v cargo-audit
+$RUSTUP_HOME/bin/cargo kcov --print-install-kcov-sh | sh
 rm -rf "$TMP_BUILD_DIR"
 
 cd "$SCRIPT_DIR/support/docker"
