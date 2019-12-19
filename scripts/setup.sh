@@ -53,12 +53,12 @@ mkdir -p "$RUSTUP_HOME"
 mkdir -p "$CARGO_HOME"
 
 mkdir "$TMP_BUILD_DIR"
+cd "$TMP_BUILD_DIR"
 curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain "$RUST_TOOLCHAIN"
 ./bin/rustup target add aarch64-unknown-linux-gnu
 ./bin/rustup target add aarch64-unknown-linux-gnu
 ./bin/rustup component add rustfmt
 ./bin/rustup component add clippy-preview
-cd "$TMP_BUILD_DIR"
 ./bin/cargo install -v cargo-kcov
 ./bin/cargo install -v cargo-audit
 ./bin/cargo kcov --print-install-kcov-sh | sh
