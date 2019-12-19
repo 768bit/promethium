@@ -1,0 +1,13 @@
+{
+  "major": 0,
+  "minor": 0,
+  "revision": 0,
+  "buildRevision": 1,
+  "uuid": "1d476a14-da05-4be7-a235-ed445d755461",
+  "dateString": "Mon Aug 26 01:58:31 BST 2019",
+  "date": "2019-08-26T01:58:31.949315223+01:00",
+  "shortID": "20190826",
+  "gitCommit": "",
+  "revisions": {},
+  "targetFolder": "/home/craig/Projects/go/src/github.com/768bit/promethium"
+}

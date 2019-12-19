@@ -1,0 +1,6 @@
+name: com.example.Test
+title: Example
+author: CJS
+created: "2019-08-02T14:23:27+01:00"
+require:
+  - osv.cli

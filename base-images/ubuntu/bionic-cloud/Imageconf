@@ -1,0 +1,7 @@
+---
+OS: ubuntu
+Version: bionic-cloud
+Class: standard
+Type: docker
+Size: 1G
+Source: ubuntu:bionic

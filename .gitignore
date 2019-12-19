@@ -1,0 +1,14 @@
+*~
+*.swp
+assets
+build
+tmp
+.tmp
+.tmp/*
+.idea
+.idea/*
+.vagrant
+.vagrant/*
+.instance
+workspace
+scripts/support/docker/rust

@@ -1,0 +1,7 @@
+---
+OS: alpine
+Version: 3.10-cloud
+Class: standard
+Type: docker
+Size: 1G
+Source: ubuntu:bionic
