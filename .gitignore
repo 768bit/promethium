@@ -1,6 +1,6 @@
 *~
 *.swp
-assets
+./assets
 build
 tmp
 .tmp

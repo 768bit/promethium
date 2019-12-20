@@ -9,9 +9,9 @@ import (
 
 	"github.com/768bit/promethium/lib/images"
 	"github.com/768bit/promethium/lib/vmm"
+	"github.com/768bit/vpkg"
 	"github.com/768bit/vutils"
 	"github.com/magefile/mage/mg"
-	"gitlab.768bit.com/pub/vpkg"
 )
 
 var CWD, _ = os.Getwd()
@@ -93,7 +93,7 @@ func Build() error {
 func packAssets() error {
 	fmt.Println("Packing Assets...")
 
-	pkrBuildCmd := vutils.Exec.CreateAsyncCommand("packr", false, "-z")
+	pkrBuildCmd := vutils.Exec.CreateAsyncCommand("packr2", false)
 	err := pkrBuildCmd.BindToStdoutAndStdErr().SetWorkingDir(filepath.Join(CWD, "lib", "assets")).StartAndWait()
 	if err != nil {
 		fmt.Println(err)
@@ -104,7 +104,7 @@ func packAssets() error {
 
 func cleanPackedAssets() error {
 	fmt.Println("Cleaning Packed Assets...")
-	packCleanCmd := vutils.Exec.CreateAsyncCommand("packr", false, "clean")
+	packCleanCmd := vutils.Exec.CreateAsyncCommand("packr2", false, "clean")
 	err := packCleanCmd.BindToStdoutAndStdErr().SetWorkingDir(filepath.Join(CWD, "lib", "assets")).StartAndWait()
 	if err != nil {
 		fmt.Println(err)
@@ -194,6 +194,7 @@ func BuildImages() error {
 			"3.10",
 		},
 	}
+	vutils.Files.CreateDirIfNotExist(ASSET_OUT_DIR)
 
 	for os, items := range dirs {
 		for _, version := range items {

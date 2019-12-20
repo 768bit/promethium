@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-  "github.com/768bit/vutils"
-  "hash/crc32"
+	"hash/crc32"
 	"io"
 	"strings"
+
+	"github.com/768bit/vutils"
 
 	"github.com/768bit/promethium/lib/images/diskfs/util"
 	uuid "github.com/satori/go.uuid"
@@ -282,7 +283,7 @@ func (t *Table) toGPTBytes(primary bool) ([]byte, error) {
 	// 16 bytes disk GUID
 	var guid uuid.UUID
 	if t.GUID == "" {
-		guid, _ = uuid.NewV4()
+		guid = uuid.NewV4()
 	} else {
 		var err error
 		guid, err = uuid.FromString(t.GUID)

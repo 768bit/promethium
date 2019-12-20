@@ -215,7 +215,7 @@ func (p *Partition) initEntry(blocksize uint64, starting uint64) error {
 	var guid uuid.UUID
 
 	if part.GUID == "" {
-		guid, _ = uuid.NewV4()
+		guid = uuid.NewV4()
 	} else {
 		var err error
 		guid, err = uuid.FromString(part.GUID)
