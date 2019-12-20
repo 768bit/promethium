@@ -329,7 +329,7 @@ func (qi *QcowImage) loadDisk() error {
 	qi.tableSaved = true
 	usr, _ := user.Current()
 	//quick chown...
-	cmd := vutils.Exec.CreateAsyncCommand("chown", false, usr, qi.connectedDevice).Sudo()
+	cmd := vutils.Exec.CreateAsyncCommand("chown", false, usr.Username, qi.connectedDevice).Sudo()
 	if err := cmd.StartAndWait(); err != nil {
 		return err
 	}
