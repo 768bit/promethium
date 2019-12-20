@@ -2,8 +2,10 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/768bit/promethium/lib/networking"
+	"github.com/768bit/promethium/lib/storage"
 	"github.com/768bit/vutils"
 )
 
@@ -57,21 +59,24 @@ func LoadPromethiumDaemonConfig() (*PromethiumDaemonConfig, error) {
 }
 
 func generateNewPromethiumDaemonConfig() error {
+	defaultPromDir := "/opt/promethium"
+	storageDir := "/opt/promethium/storage/default-local"
+	storageName := "default-local"
 	newUUID, _ := vutils.UUID.MakeUUIDString()
 	oconfig := &PromethiumDaemonConfig{
 		NodeID:   newUUID,
 		Clusters: []*ClusterConfig{},
 		Storage: []*StorageConfig{
 			{
-				ID:     "default",
+				ID:     storageName,
 				Driver: "local-file",
 				Config: map[string]interface{}{
-					"rootFolder": "/opt/promethium/storage/default-local",
+					"rootFolder": storageDir,
 				},
 			},
 		},
 		Networks:  []*networking.NetworkConfig{},
-		AppRoot:   "/opt/promethium",
+		AppRoot:   defaultPromDir,
 		JailUser:  "promethium_jail",
 		JailGroup: "promethium_jail",
 		API: &APIConfig{
@@ -80,5 +85,21 @@ func generateNewPromethiumDaemonConfig() error {
 		},
 	}
 	err, _ := vutils.Config.TrySaveConfig(CWD, PROMETHIUM_DAEMON_CONFIG_LOAD_LIST, oconfig)
+	if err != nil {
+		//return err
+		return err
+	}
+	//now create the default folder structure...
+	vutils.Files.CreateDirIfNotExist(defaultPromDir)
+	//we also need to create others
+	firecrackerDir := filepath.Join(defaultPromDir, "firecracker")
+	storageDir := filepath.Join(defaultPromDir, "storage")
+	instancesDir := filepath.Join(defaultPromDir, "instances")
+	vutils.Files.CreateDirIfNotExist(firecrackerDir)
+	vutils.Files.CreateDirIfNotExist(storageDir)
+	vutils.Files.CreateDirIfNotExist(instancesDir)
+
+	_, err : = storage.InitLocalFileStorage(storageName, storageName)
+
 	return err
 }
