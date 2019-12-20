@@ -32,6 +32,7 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
+	github.com/urfave/cli/v2 v2.0.0
 	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553 // indirect
 	golang.org/x/oauth2 v0.0.0-20191202225959-858c2ad4c8b6
 	golang.org/x/sys v0.0.0-20191219235734-af0d71d358ab
