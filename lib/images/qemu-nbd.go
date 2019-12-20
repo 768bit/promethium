@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"os/user"
 	"regexp"
 	"strconv"
 	"strings"
@@ -327,7 +328,7 @@ func (qi *QcowImage) Disconnect() error {
 func (qi *QcowImage) loadDisk() error {
 	qi.tableSaved = true
 	//quick chown...
-	cmd := vutils.Exec.CreateAsyncCommand("chown", false, "craig", qi.connectedDevice).Sudo()
+	cmd := vutils.Exec.CreateAsyncCommand("chown", false, user.Current(), qi.connectedDevice).Sudo()
 	if err := cmd.StartAndWait(); err != nil {
 		return err
 	}
