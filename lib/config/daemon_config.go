@@ -12,7 +12,7 @@ import (
 type PromethiumDaemonConfig struct {
 	NodeID    string                      `json:"nodeID"`
 	Clusters  []*ClusterConfig            `json:"clusters"`
-	Storage   []*StorageConfig            `json:"storage"`
+	Storage   []*storage.StorageConfig    `json:"storage"`
 	Networks  []*networking.NetworkConfig `json:"networks"`
 	AppRoot   string                      `json:"appRoot"`
 	JailUser  string                      `json:"jailUser"`
@@ -23,12 +23,6 @@ type PromethiumDaemonConfig struct {
 type ClusterConfig struct {
 	ID    string        `json:"id"`
 	Nodes []interface{} `json:"nodes"`
-}
-
-type StorageConfig struct {
-	ID     string                 `json:"id"`
-	Driver string                 `json:"driver"`
-	Config map[string]interface{} `json:"config"`
 }
 
 type APIConfig struct {
@@ -66,7 +60,7 @@ func generateNewPromethiumDaemonConfig() error {
 	oconfig := &PromethiumDaemonConfig{
 		NodeID:   newUUID,
 		Clusters: []*ClusterConfig{},
-		Storage: []*StorageConfig{
+		Storage: []*storage.StorageConfig{
 			{
 				ID:     storageName,
 				Driver: "local-file",
@@ -93,13 +87,13 @@ func generateNewPromethiumDaemonConfig() error {
 	vutils.Files.CreateDirIfNotExist(defaultPromDir)
 	//we also need to create others
 	firecrackerDir := filepath.Join(defaultPromDir, "firecracker")
-	storageDir := filepath.Join(defaultPromDir, "storage")
+	storageDirPath := filepath.Join(defaultPromDir, "storage")
 	instancesDir := filepath.Join(defaultPromDir, "instances")
 	vutils.Files.CreateDirIfNotExist(firecrackerDir)
-	vutils.Files.CreateDirIfNotExist(storageDir)
+	vutils.Files.CreateDirIfNotExist(storageDirPath)
 	vutils.Files.CreateDirIfNotExist(instancesDir)
 
-	_, err : = storage.InitLocalFileStorage(storageName, storageName)
+	_, err = storage.InitLocalFileStorage(storageName, oconfig.Storage[0].Config)
 
 	return err
 }

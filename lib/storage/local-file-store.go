@@ -71,7 +71,7 @@ func InitLocalFileStorage(id string, config map[string]interface{}) (*LocalFileS
 	vutils.Files.CreateDirIfNotExist(rootFolder)
 	imagesPath := filepath.Join(rootFolder, "images")
 	vutils.Files.CreateDirIfNotExist(imagesPath)
-	disksFolder := filepath.Join(rootFolder, "vmdisks")
+	disksFolder := filepath.Join(rootFolder, "disks")
 	vutils.Files.CreateDirIfNotExist(disksFolder)
 	return LoadLocalFileStorage(id, config)
 }
