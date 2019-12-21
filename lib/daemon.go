@@ -179,6 +179,7 @@ func (pd *PromethiumDaemon) Start() error {
 		log.Fatalln(err)
 	}
 	api := operations.NewServerAPI(swaggerSpec)
+
 	server := restapi.NewServer(api)
 	restapi.SetManager(pd.vmmManager)
 	server.ConfigureFlags()
