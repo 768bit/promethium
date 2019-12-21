@@ -14,6 +14,7 @@ import (
 var ZFS_ROOT_PATH = envy.Get("PROMETHIUM_ZFS_ROOT_PATH", "nvmepool0/promethium")
 
 type ZfsStorage struct {
+	sm            *StorageManager
 	id            string
 	rootZfsPath   string
 	mountPoint    string
@@ -25,7 +26,7 @@ type ZfsStorage struct {
 	disksEnabled  bool
 }
 
-func LoadZfsStorage(id string, zfsPath string) (*ZfsStorage, error) {
+func LoadZfsStorage(sm *StorageManager, id string, zfsPath string) (*ZfsStorage, error) {
 	//check the dataset exists
 	ds, err := gozfs.GetDataset(zfsPath)
 	if err != nil {
@@ -37,6 +38,7 @@ func LoadZfsStorage(id string, zfsPath string) (*ZfsStorage, error) {
 	imagesFolder := filepath.Join(ds.Mountpoint, "images")
 
 	zfsStorage := &ZfsStorage{
+		sm:           sm,
 		id:           id,
 		mountPoint:   ds.Mountpoint,
 		imagesCache:  map[string]string{},
@@ -75,6 +77,14 @@ func (zfs *ZfsStorage) isMounted() bool {
 	}
 }
 
+func (zfs *ZfsStorage) GetURI() string {
+	return "zfs://" + zfs.id
+}
+
+func (zfs *ZfsStorage) LookupPath(path string) (string, bool, error) {
+	return "zfs://" + zfs.id, false, nil
+}
+
 func (zfs *ZfsStorage) GetImages() ([]*images.Image, error) {
 	//in zfs images are stored under a filesystem path..
 	//vm disks are block devices (volumes)
@@ -88,7 +98,8 @@ func (zfs *ZfsStorage) GetImages() ([]*images.Image, error) {
 		files := vutils.Files.GetFilesInDirWithExtension(zfs.imagesFolder, "prk")
 		imagesList := []*images.Image{}
 		for _, file := range files {
-			img, err := images.LoadImageFromPrk(file)
+			imageFilePath := filepath.Join(zfs.imagesFolder, file)
+			img, err := images.LoadImageFromPrk(imageFilePath, zfs.sm.imagesCache)
 			if err != nil {
 				return nil, err
 			}
@@ -112,7 +123,7 @@ func (zfs *ZfsStorage) GetImage(name string) (*images.Image, error) {
 		if !vutils.Files.CheckPathExists(imageFilePath) {
 			return nil, errors.New("Unable to find image with name " + name)
 		} else {
-			img, err := images.LoadImageFromPrk(imageFilePath)
+			img, err := images.LoadImageFromPrk(imageFilePath, zfs.sm.imagesCache)
 			if err != nil {
 				return nil, err
 			}
@@ -145,13 +156,17 @@ func (zfs *ZfsStorage) GetImageById(id string) (*images.Image, error) {
 		if !vutils.Files.CheckPathExists(imageFilePath) {
 			return nil, errors.New("Unable to find image with id " + id)
 		} else {
-			img, err := images.LoadImageFromPrk(imageFilePath)
+			img, err := images.LoadImageFromPrk(imageFilePath, zfs.sm.imagesCache)
 			if err != nil {
 				return nil, err
 			}
 			return img, nil
 		}
 	}
+}
+
+func (zfs *ZfsStorage) CreateDiskFromImage(id string, img *images.Image, size uint64) (*VmmStorageDisk, *VmmKernel, error) {
+	return nil, nil, nil
 }
 
 func SetZfsRootPath(newRootPath string) {

@@ -3,12 +3,12 @@ package vmm
 import (
 	"errors"
 
-	"github.com/768bit/promethium/api/client"
+	client "github.com/768bit/promethium/api/client"
 	"github.com/768bit/promethium/cmd/common"
 	"github.com/urfave/cli/v2"
 )
 
-var ApiCli *client.APIClient
+var ApiCli *client.Promethium
 
 var VmmSubCommand = cli.Command{
 	Name:    "vmm",
@@ -46,5 +46,8 @@ var VmmSubCommand = cli.Command{
 	},
 	Subcommands: []*cli.Command{
 		&ListInstancesCommand,
+		&CreateInstanceCommand,
+		&StartInstanceCommand,
+		&InstanceConsoleCommand,
 	},
 }

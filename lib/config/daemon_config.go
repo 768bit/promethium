@@ -5,14 +5,13 @@ import (
 	"path/filepath"
 
 	"github.com/768bit/promethium/lib/networking"
-	"github.com/768bit/promethium/lib/storage"
 	"github.com/768bit/vutils"
 )
 
 type PromethiumDaemonConfig struct {
 	NodeID    string                      `json:"nodeID"`
 	Clusters  []*ClusterConfig            `json:"clusters"`
-	Storage   []*storage.StorageConfig    `json:"storage"`
+	Storage   []*StorageConfig            `json:"storage"`
 	Networks  []*networking.NetworkConfig `json:"networks"`
 	AppRoot   string                      `json:"appRoot"`
 	JailUser  string                      `json:"jailUser"`
@@ -28,6 +27,12 @@ type ClusterConfig struct {
 type APIConfig struct {
 	BindAddress string `json:"bindAddress"`
 	Port        uint   `json:"port"`
+}
+
+type StorageConfig struct {
+	ID     string                 `json:"id"`
+	Driver string                 `json:"driver"`
+	Config map[string]interface{} `json:"config"`
 }
 
 const PROMETHIUM_CONFIG_DIR = "/etc/promethium"
@@ -60,7 +65,7 @@ func generateNewPromethiumDaemonConfig() error {
 	oconfig := &PromethiumDaemonConfig{
 		NodeID:   newUUID,
 		Clusters: []*ClusterConfig{},
-		Storage: []*storage.StorageConfig{
+		Storage: []*StorageConfig{
 			{
 				ID:     storageName,
 				Driver: "local-file",
@@ -93,7 +98,7 @@ func generateNewPromethiumDaemonConfig() error {
 	vutils.Files.CreateDirIfNotExist(storageDirPath)
 	vutils.Files.CreateDirIfNotExist(instancesDir)
 
-	_, err = storage.InitLocalFileStorage(storageName, oconfig.Storage[0].Config)
+	//err = storage.InitLocalFileStorage(storageName, oconfig.Storage[0].Config)
 
 	return err
 }

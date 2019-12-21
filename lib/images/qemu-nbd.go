@@ -228,8 +228,7 @@ func (qi *QcowImage) init() error {
 
 func (qi *QcowImage) getInfo() error {
 	//get status info etc...
-	cmd := vutils.Exec.CreateAsyncCommand("qemu-img", false, "info", "--output=json", "-f", "qcow2", qi.path).
-		CaptureStdoutAndStdErr(false, true)
+	cmd := vutils.Exec.CreateAsyncCommand("qemu-img", false, "info", "--output=json", "-f", "qcow2", qi.path).CaptureStdoutAndStdErr(false, true)
 	err := cmd.StartAndWait()
 	if err != nil {
 		return stacktrace.Propagate(err, "Failed to get qemu-img info")
@@ -325,6 +324,28 @@ func (qi *QcowImage) Disconnect() error {
 	return QemuNbd.disconnect(qi)
 }
 
+func (qi *QcowImage) GrowFullPart() error {
+	//this will unmount the temporary mountpoint
+	if !qi.connected {
+		return ImageNotConnected
+	} else if qi.mounted {
+		return ImageMountedError
+	}
+	//we are good, lets do this!
+	// cmd := vutils.Exec.CreateAsyncCommand("growpart", false, qp.img.connectedDevice, fmt.Sprintf("%d", qp.index)).Sudo()
+	// err = cmd.BindToStdoutAndStdErr().StartAndWait()
+	// if err != nil {
+	// 	return err
+	// }
+	cmd := vutils.Exec.CreateAsyncCommand("resize2fs", false, qi.connectedDevice).Sudo()
+	err := cmd.BindToStdoutAndStdErr().StartAndWait()
+	if err != nil {
+		return err
+	}
+	return nil
+
+}
+
 func (qi *QcowImage) loadDisk() error {
 	qi.tableSaved = true
 	usr, _ := user.Current()
@@ -356,6 +377,7 @@ func (qi *QcowImage) loadDisk() error {
 	qi.disk = dsk
 	tb, err := qi.disk.GetPartitionTable()
 	if err != nil {
+		println(err.Error())
 		qi.isGpt = false
 		qi.mbr = nil
 		qi.gpt = nil
@@ -1283,4 +1305,31 @@ func (qp *QcowImagePartition) UnmountAt(path string) error {
 	} else {
 		return ImageNotMountedError
 	}
+}
+
+func (qp *QcowImagePartition) GrowPart() error {
+	//this will unmount the temporary mountpoint
+	if qp.mounted {
+		return ImageMountedError
+	}
+	//lets check there are no partitions after this one...
+	_, err := qp.img.GetPartition(qp.index + 1)
+	if err == PartitionMissingError {
+		//we are good, lets do this!
+		cmd := vutils.Exec.CreateAsyncCommand("growpart", false, qp.img.connectedDevice, fmt.Sprintf("%d", qp.index)).Sudo()
+		err = cmd.BindToStdoutAndStdErr().StartAndWait()
+		if err != nil {
+			return err
+		}
+		cmd = vutils.Exec.CreateAsyncCommand("resize2fs", false, qp.dev).Sudo()
+		err = cmd.BindToStdoutAndStdErr().StartAndWait()
+		if err != nil {
+			return err
+		}
+		return nil
+
+	} else {
+		return errors.New("Unable to grow this partition as there are other partions after this one")
+	}
+
 }

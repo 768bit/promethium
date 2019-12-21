@@ -3,6 +3,8 @@ package storage
 import (
 	"errors"
 	"os"
+
+	"github.com/768bit/promethium/lib/config"
 )
 
 type DiskFileFormat string
@@ -13,6 +15,8 @@ const (
 )
 
 type VmmStorageDisk struct {
+	id                    string
+	name                  string
 	path                  string
 	isBlockDevice         bool
 	isNbdMounted          bool
@@ -21,12 +25,15 @@ type VmmStorageDisk struct {
 	storageDriver         StorageDriver
 }
 
-func NewStorageDisk(path string) (*VmmStorageDisk, error) {
+func NewStorageDisk(id string, name string, path string, driver StorageDriver) (*VmmStorageDisk, error) {
 	vmd := &VmmStorageDisk{
+		id:                    id,
+		name:                  name,
 		path:                  path,
 		isBlockDevice:         false,
 		isNbdMounted:          false,
 		storageDiskFileFormat: UnknownVmmDiskFileFormat,
+		storageDriver:         driver,
 	}
 	if err := vmd.init(); err != nil {
 		return nil, err
@@ -60,5 +67,18 @@ func (vmd *VmmStorageDisk) establishStorageType() (DiskFileFormat, error) {
 	} else {
 
 		return QCow2VmmDiskFileFormat, nil
+	}
+}
+
+func (vmd *VmmStorageDisk) ToDiskConfig() *config.VmmDiskConfig {
+	//check what type of device this is..
+	fullStorageUri := vmd.storageDriver.GetURI() + "/disks/" + vmd.id + "/" + vmd.name
+	isRoot := false
+	if vmd.name == "root" {
+		isRoot = true
+	}
+	return &config.VmmDiskConfig{
+		StorageURI: fullStorageUri,
+		IsRoot:     isRoot,
 	}
 }

@@ -1,7 +1,7 @@
 ---
 OS: ubuntu
 Version: bionic
-Class: standard
+Class: firecracker-standard
 Type: docker
 Size: 1G
 Source: ubuntu:bionic

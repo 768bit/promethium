@@ -10,7 +10,15 @@ type IP4Config struct {
 	DHCP    bool   `json:"dhcp"`
 	Address string `json:"address,omitempty"`
 	Gateway string `json:"gateway,omitempty"`
-	Vlan    uint16 `json:"vlan"`
+	Vlan    int32  `json:"vlan"`
+}
+
+type IP6Config struct {
+	Enabled bool   `json:"enabled"`
+	DHCP    bool   `json:"dhcp"`
+	Address string `json:"address,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+	Vlan    int32  `json:"vlan"`
 }
 
 type NetworkConfig struct {
@@ -20,6 +28,14 @@ type NetworkConfig struct {
 	Enabled         bool                         `json:"enabled"`
 	MasterInterface *BridgeMasterInterfaceConfig `json:"masterInterface"`
 	IPV4            *IP4Config                   `json:"ipv4"`
+	IPV6            *IP6Config                   `json:"ipv6"`
+}
+
+type PhysicalInterface struct {
+	Name       string   `json:"name"`
+	MacAddress string   `json:"macAddress"`
+	MTU        int      `json:"mtu"`
+	Addresses  []string `json:"addresses"`
 }
 
 type BridgeDriver string

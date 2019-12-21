@@ -13,21 +13,57 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
+	"syscall"
+	"time"
 
+	"github.com/768bit/promethium/api/models"
+	"github.com/768bit/promethium/lib/config"
 	"github.com/768bit/vutils"
 	gounits "github.com/docker/go-units"
+	"github.com/go-openapi/strfmt"
 	"gopkg.in/yaml.v2"
 )
 
 type ImageConfFile struct {
-	OS        string    `yaml:"OS" json:"OS"`
-	Version   string    `yaml:"Version" json:"Version"`
-	Type      string    `yaml:"Type" json:"Type"`
-	Class     ImageType `yaml:"Class" json:"Class"`
-	Size      string    `yaml:"Size" json:"Size"`
-	Source    string    `yaml:"Source" json:"Source"`
+	OS        string         `yaml:"OS" json:"OS"`
+	Version   string         `yaml:"Version" json:"Version"`
+	Type      string         `yaml:"Type" json:"Type"`
+	Class     config.VmmType `yaml:"Class" json:"Class"`
+	Size      string         `yaml:"Size" json:"Size"`
+	Source    string         `yaml:"Source" json:"Source"`
 	sizeBytes int64
 	rootPath  string
+}
+
+type ImageCacheFile struct {
+	ID         string   `json:"id"`
+	ImageHash  string   `json:"imageHash"`
+	KernelHash string   `json:"kernelHash"`
+	Files      []string `json:"files"`
+	hash       string
+}
+
+func (icf *ImageCacheFile) AddFile(path string) {
+	icf.Files = append(icf.Files, path)
+	icf.calculateHash()
+}
+
+func (icf *ImageCacheFile) calculateHash() {
+	h := sha256.New()
+	h.Write([]byte(icf.ID))
+	h.Write([]byte(icf.ImageHash))
+	h.Write([]byte(icf.KernelHash))
+	h.Write([]byte(strings.Join(icf.Files, ",")))
+
+	icf.hash = fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func (icf *ImageCacheFile) GetHash() string {
+	if icf.hash == "" {
+		icf.calculateHash()
+	}
+	return icf.hash
 }
 
 func (icf *ImageConfFile) runDockerBuild(workDir string, mountPoint string) error {
@@ -56,14 +92,6 @@ var ImageArchitectures = []ImageArchitecture{
 	X86_64,
 	AARCH64,
 }
-
-type ImageType string
-
-const (
-	StandardImage ImageType = "standard"
-	OSvImage      ImageType = "osv"
-	QemuImage     ImageType = "qemu"
-)
 
 type ImageFsType string
 
@@ -99,22 +127,13 @@ const (
 ////}
 
 type Image struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Version      string            `json:"version"`
-	Type         ImageType         `json:"type"`
-	Size         uint64            `json:"size"`
-	Source       ImageSourceType   `json:"source"`
-	SourceURI    string            `json:"sourceUri"`
-	ImageHash    string            `json:"imageHash"`
-	KernelHash   string            `json:"kernelHash"`
-	Architecture ImageArchitecture `json:"architecture"`
-	isPrk        bool
-	backendType  ImageBackendType
-	imagePath    string
-	kernelPath   string
-	bootParams   string
-	prkPath      string
+	models.Image
+	createdAt   time.Time
+	isPrk       bool
+	backendType ImageBackendType
+	imagePath   string
+	kernelPath  string
+	prkPath     string
 }
 
 func determineImageBackend(path string) (ImageBackendType, error) {
@@ -138,7 +157,7 @@ func determineImageBackend(path string) (ImageBackendType, error) {
 
 }
 
-func NewImageFromQcow(name string, version string, imgType ImageType, size uint64, source ImageSourceType, sourceURI string, imagePath string, kernelPath string) (*Image, error) {
+func NewImageFromQcow(name string, version string, vmmType config.VmmType, size uint64, source ImageSourceType, sourceURI string, imagePath string, kernelPath string) (*Image, error) {
 	//lets figure out what backend we are using for the image
 	imgBackend, err := determineImageBackend(imagePath)
 	if err != nil {
@@ -149,13 +168,15 @@ func NewImageFromQcow(name string, version string, imgType ImageType, size uint6
 
 	imgId, _ := vutils.UUID.MakeUUIDString()
 	im := &Image{
-		ID:          imgId,
-		Name:        name,
-		Version:     version,
-		Type:        imgType,
+		Image: models.Image{
+			ID:        imgId,
+			Name:      name,
+			Version:   version,
+			Type:      string(vmmType),
+			Source:    string(source),
+			SourceURI: sourceURI,
+		},
 		backendType: imgBackend,
-		Source:      source,
-		SourceURI:   sourceURI,
 		imagePath:   imagePath,
 		kernelPath:  kernelPath,
 	}
@@ -230,17 +251,17 @@ func BuildPackageFrom(imageRootPath string, outputPath string) (*Image, error) {
 			}
 			kernelPath := filepath.Join(tdir, "kernel.elf")
 			imagePath := filepath.Join(tdir, "root.qcow2")
-			img, err := NewImageFromQcow(imgConf.OS, imgConf.Version, StandardImage, uint64(imgConf.sizeBytes), DockerImage, imgConf.Source, imagePath, kernelPath)
+			img, err := NewImageFromQcow(imgConf.OS, imgConf.Version, config.FirecrackerVmm, uint64(imgConf.sizeBytes), DockerImage, imgConf.Source, imagePath, kernelPath)
 			if err != nil {
 				return nil, err
 			}
-			img.Architecture = getCurrentSysArch()
+			img.Image.Architecture = string(getCurrentSysArch())
 			println("Building for architecture: " + string(img.Architecture))
-			err = img.CreatePackage(tdir, outputPath)
+			prkPath, err := img.CreatePackage(tdir, outputPath)
 			if err != nil {
 				return nil, err
 			}
-			return img, nil
+			return LoadImageFromPrk(prkPath, nil)
 		}
 	}
 	return nil, nil
@@ -256,25 +277,36 @@ func getCurrentSysArch() ImageArchitecture {
 	return X86_64
 }
 
-func LoadImageFromPrk(path string) (*Image, error) {
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
+func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Image, error) {
 	//we need to get the prk file and get the metadata item..
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-
-	defer file.Close()
 	archive, err := gzip.NewReader(file)
 
 	if err != nil {
+		file.Close()
 		return nil, err
 	}
-	defer archive.Close()
 	tr := tar.NewReader(archive)
 	var img Image
 	imageHash := ""
 	kernelHash := ""
-
+	calcHash := false
+	makeCacheEntry := false
+	addCacheFile := false
+	var currentCacheEntry *ImageCacheFile
+	count := 0
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -286,40 +318,140 @@ func LoadImageFromPrk(path string) (*Image, error) {
 			bs, _ := ioutil.ReadAll(tr)
 			err = json.Unmarshal(bs, &img)
 			if err != nil {
+				archive.Close()
+				file.Close()
 				return nil, err
 			}
-		} else if hdr.Name == "root.qcow2" {
-			//calculate hash for image...
-			if hash, err := CalculateHashForReader(tr); err != nil {
-				return nil, err
+			if imagesCache != nil {
+				if v, ok := imagesCache[img.ID]; !ok || v == nil {
+					println("no cache entry for " + img.ID)
+					makeCacheEntry = true
+					calcHash = true
+				} else if !contains(v.Files, path) {
+					println("no cache file entry for " + img.ID)
+					currentCacheEntry = v
+					calcHash = true
+					addCacheFile = true
+				} else {
+					println("have cache entry for " + img.ID)
+					currentCacheEntry = v
+				}
 			} else {
-				imageHash = hash
+				calcHash = true
+			}
+			count++
+			if count >= 2 {
+				break
+			}
+		} else if hdr.Name == "boot" {
+			//load the image metadata..
+			bs, _ := ioutil.ReadAll(tr)
+			img.BootParams = string(bs)
+			count++
+			if count >= 2 {
+				break
+			}
+		}
+	}
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	stat := fi.Sys().(*syscall.Stat_t)
+	img.createdAt = time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+
+	pd, _ := strfmt.ParseDateTime(img.createdAt.Format("2006-01-02T15:04:05"))
+	//println(pd.String() + " - " + img.createdAt.Format("2006-01-02T15:04:05"))
+	img.Image.CreatedAt = pd
+
+	archive.Close()
+	file.Close()
+
+	if calcHash {
+		println("Calculating hash for " + img.ID)
+		file, err = os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		archive, err = gzip.NewReader(file)
+		if err != nil {
+			return nil, err
+		}
+		defer archive.Close()
+		tr = tar.NewReader(archive)
+
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
+			} else if calcHash && hdr.Name == "root.qcow2" {
+				//calculate hash for image...
+				if hash, err := CalculateHashForReader(tr); err != nil {
+					return nil, err
+				} else {
+					imageHash = hash
+				}
+
+			} else if calcHash && hdr.Name == "kernel.elf" {
+				//calculate hash for image...
+				if hash, err := CalculateHashForReader(tr); err != nil {
+					return nil, err
+				} else {
+					kernelHash = hash
+				}
+
 			}
 
-		} else if hdr.Name == "kernel.elf" {
-			//calculate hash for image...
-			if hash, err := CalculateHashForReader(tr); err != nil {
-				return nil, err
-			} else {
-				kernelHash = hash
-			}
+		}
+	}
 
+	if currentCacheEntry != nil && !calcHash {
+		if currentCacheEntry.ImageHash != img.ImageHash {
+			return nil, errors.New("The cached image hash doesnt match the hash for the embedded image")
+		} else if currentCacheEntry.KernelHash != img.KernelHash {
+			return nil, errors.New("The cached kernel hash doesnt match the hash for the embedded kernel")
+		}
+	} else {
+
+		if imageHash == "" {
+			return nil, errors.New("Unable to calculate hash for embedded image file")
+		} else if img.ImageHash == "" {
+			return nil, errors.New("The image metadata information doesnt contain an image hash")
+		} else if img.ImageHash != imageHash {
+			return nil, errors.New("The image metadata image hash doesnt match the calculated hash for the embedded image")
+		} else if kernelHash == "" {
+			return nil, errors.New("Unable to calculate hash for embedded kernel file")
+		} else if img.KernelHash == "" {
+			return nil, errors.New("The image metadata information doesnt contain a kernel hash")
+		} else if img.KernelHash != kernelHash {
+			return nil, errors.New("The image metadata kernel hash doesnt match the calculated hash for the embedded kernel")
+		}
+
+		//now check cache entry
+
+		if currentCacheEntry != nil {
+			if currentCacheEntry.ImageHash != imageHash {
+				return nil, errors.New("The cached image hash doesnt match the calculated hash for the embedded image")
+			} else if currentCacheEntry.KernelHash != kernelHash {
+				return nil, errors.New("The cached kernel hash doesnt match the calculated hash for the embedded kernel")
+			}
 		}
 
 	}
 
-	if imageHash == "" {
-		return nil, errors.New("Unable to calculate hash for embedded image file")
-	} else if img.ImageHash == "" {
-		return nil, errors.New("The image metadata information doesnt contain an image hash")
-	} else if img.ImageHash != imageHash {
-		return nil, errors.New("The image metadata image hash doesnt match the calculated hash for the embedded image")
-	} else if kernelHash == "" {
-		return nil, errors.New("Unable to calculate hash for embedded kernel file")
-	} else if img.KernelHash == "" {
-		return nil, errors.New("The image metadata information doesnt contain a kernel hash")
-	} else if img.KernelHash != kernelHash {
-		return nil, errors.New("The image metadata kernel hash doesnt match the calculated hash for the embedded kernel")
+	if makeCacheEntry {
+		imagesCache[img.ID] = &ImageCacheFile{
+			ID:         img.ID,
+			ImageHash:  img.ImageHash,
+			KernelHash: img.KernelHash,
+			Files:      []string{path},
+		}
+		imagesCache[img.ID].calculateHash()
+	} else if addCacheFile {
+		imagesCache[img.ID].AddFile(path)
 	}
 
 	img.imagePath = path + "#root.qcow2"
@@ -333,27 +465,27 @@ func LoadImageFromPrk(path string) (*Image, error) {
 
 var PrkImagePathRX = regexp.MustCompile("^(.+\\.prk)#root.qcow2$")
 
-func (im *Image) CreatePackage(workspacePath string, outputRoot string) error {
+func (im *Image) CreatePackage(workspacePath string, outputRoot string) (string, error) {
 
 	//need to establish if this is already an image file... we dont output packages for things that are already packages..
 
-	if im.isPrk {
-		return errors.New("Cannot create a package from a package (it would overwrite the package).")
+	opath := filepath.Join(outputRoot, fmt.Sprintf("%s-%s.prk", im.Name, im.Version))
+	if im.isPrk && im.prkPath == opath { //allow the clone and rebuild process...
+		return "", errors.New("Cannot create a package from a package (it would overwrite the package).")
 	}
 
 	vutils.Files.CreateDirIfNotExist(outputRoot)
-	opath := filepath.Join(outputRoot, fmt.Sprintf("%s-%s.prk", im.Name, im.Version))
 	os.Remove(opath)
 
 	//create the image metadata file
 
 	if err := im.writeMetadataForWorkspace(workspacePath); err != nil {
-		return err
+		return opath, err
 	}
 
 	files, err := ioutil.ReadDir(workspacePath)
 	if err != nil {
-		return err
+		return opath, err
 	}
 	flist := make([]string, len(files))
 	for index, fileInfo := range files {
@@ -362,7 +494,7 @@ func (im *Image) CreatePackage(workspacePath string, outputRoot string) error {
 	argsList := append([]string{"-czvf", opath}, flist...)
 	buildCmd := vutils.Exec.CreateAsyncCommand("tar", false, argsList...)
 	err = buildCmd.SetWorkingDir(workspacePath).BindToStdoutAndStdErr().StartAndWait()
-	return nil
+	return opath, err
 }
 
 func (im *Image) writeMetadataForWorkspace(workspacePath string) error {
@@ -482,4 +614,117 @@ func loadImageConfFile(path string) (*ImageConfFile, error) {
 	}
 	t.sizeBytes = sb
 	return &t, nil
+}
+
+func (im *Image) CloneRootDiskToPath(id string, outPath string, size uint64) (string, string, error) {
+
+	imgOutPath := filepath.Join(outPath, id+".qcow2")
+	kernelOutPath := filepath.Join(outPath, id+".elf")
+	if im.isPrk {
+		file, err := os.Open(im.prkPath)
+		if err != nil {
+			return "", "", err
+		}
+		defer file.Close()
+		archive, err := gzip.NewReader(file)
+		if err != nil {
+			return "", "", err
+		}
+		defer archive.Close()
+		tr := tar.NewReader(archive)
+
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return "", "", err
+			} else if hdr.Name == "root.qcow2" {
+				ofile, err := os.Create(imgOutPath)
+				if err != nil {
+					return "", "", err
+				}
+
+				_, err = io.Copy(ofile, tr)
+				ofile.Close()
+				if err != nil {
+					return "", "", err
+				}
+
+				//now we have the file lets do the expansion as needed
+
+				err = doImageResize(imgOutPath, size)
+				if err != nil {
+					return "", "", err
+				}
+
+			} else if hdr.Name == "kernel.elf" {
+				ofile, err := os.Create(kernelOutPath)
+				if err != nil {
+					return "", "", err
+				}
+
+				_, err = io.Copy(ofile, tr)
+				ofile.Close()
+				if err != nil {
+					return "", "", err
+				}
+
+			}
+
+		}
+	} else {
+		//just copy the images...
+		if err := vutils.Files.Copy(im.imagePath, imgOutPath); err != nil {
+			return "", "", err
+		} else if err := vutils.Files.Copy(im.kernelPath, kernelOutPath); err != nil {
+			return "", "", err
+		}
+		err := doImageResize(imgOutPath, size)
+		if err != nil {
+			return "", "", err
+		}
+
+	}
+	return imgOutPath, kernelOutPath, nil
+
+}
+
+func doImageResize(path string, size uint64) error {
+	qcimg, err := LoadQcowImage(path)
+	if err != nil {
+		return err
+	}
+
+	if size < qcimg.VirtualSize() {
+		return errors.New("Unable to resize the image as it will be smaller than the original")
+	} else if size > qcimg.VirtualSize() {
+		//resize the image...
+		err = qcimg.Resize(size)
+		if err != nil {
+			return err
+		}
+		err = qcimg.Connect()
+		if err != nil {
+			return err
+		}
+		// err = qcimg.Mount()
+		// if err != nil {
+		//   qcimg.Disconnect()
+		//   return "", err
+		// }
+		// defer qcimg.Unmount()
+		defer qcimg.Disconnect()
+		part, err := qcimg.GetPartition(1)
+		if err != nil {
+			println(err.Error())
+			return qcimg.GrowFullPart()
+		} else {
+			err = part.GrowPart()
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

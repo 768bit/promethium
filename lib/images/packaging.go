@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/768bit/promethium/lib/config"
 	"github.com/768bit/vutils"
 )
 
@@ -16,7 +17,7 @@ type ImageBuildSpec struct {
 	Version      string
 	BuildScript  string
 	SourceURI    string
-	Type         ImageType
+	Type         config.VmmType
 	Architecture ImageArchitecture
 	Source       ImageSourceType
 	Args         []string

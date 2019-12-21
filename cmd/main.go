@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/768bit/promethium/cmd/daemon"
+	"github.com/768bit/promethium/cmd/img"
 	"github.com/768bit/promethium/cmd/vmm"
 	"github.com/urfave/cli/v2"
 )
@@ -33,6 +34,7 @@ func main() {
 	app.Commands = []*cli.Command{
 		&daemon.RunDaemonCommand,
 		&vmm.VmmSubCommand,
+		&img.ImagesSubCommand,
 	}
 
 	err := app.Run(os.Args)

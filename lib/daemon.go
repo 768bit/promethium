@@ -1,20 +1,16 @@
 package lib
 
 import (
-	"fmt"
 	"log"
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
-	"github.com/768bit/promethium/api"
+	"github.com/768bit/promethium/api/restapi"
+	"github.com/768bit/promethium/api/restapi/operations"
 	"github.com/768bit/promethium/lib/config"
-	"github.com/768bit/promethium/lib/images"
-	"github.com/768bit/promethium/lib/storage"
 	"github.com/768bit/promethium/lib/vmm"
+	"github.com/go-openapi/loads"
 	"github.com/gorilla/mux"
 	"gopkg.in/hlandau/easyconfig.v1"
 	"gopkg.in/hlandau/service.v2"
@@ -40,14 +36,12 @@ func NewPromethiumDaemon(foreground bool) (*PromethiumDaemon, error) {
 }
 
 type PromethiumDaemon struct {
-	config         *config.PromethiumDaemonConfig
-	exitChan       chan os.Signal
-	waitChan       chan bool
-	vmmManager     *vmm.VmmManager
-	imgManager     *images.ImagesManager
-	storageManager *storage.StorageManager
-	status         PromethiumDaemonStatus
-	api            *mux.Router
+	config     *config.PromethiumDaemonConfig
+	exitChan   chan os.Signal
+	waitChan   chan bool
+	vmmManager *vmm.VmmManager
+	status     PromethiumDaemonStatus
+	api        *mux.Router
 }
 
 func (pd *PromethiumDaemon) init(foreground bool) error {
@@ -58,7 +52,11 @@ func (pd *PromethiumDaemon) init(foreground bool) error {
 		return err
 	}
 	pd.config = cfg
-	pd.imgManager = images.NewImageManager(filepath.Join(pd.config.AppRoot, "images"))
+	// pd.storageManager, err := storage.NewStorageManager(cfg.Storage)
+	// if err != nil {
+	//   return err
+	// }
+	//pd.imgManager = images.NewImageManager(filepath.Join(pd.config.AppRoot, "images"))
 	//capture interrupts/signals
 	if !foreground {
 		pd.setupDaemonise()
@@ -162,7 +160,10 @@ func (pd *PromethiumDaemon) setupForeground() {
 	pd.waitChan = make(chan bool)
 
 	pd.captureInterrupts()
-	pd.Start()
+	err := pd.Start()
+	if err != nil {
+		println(err.Error())
+	}
 
 }
 
@@ -173,23 +174,46 @@ func (pd *PromethiumDaemon) Start() error {
 	if pd.vmmManager, err = vmm.NewVmmManager(pd.config); err != nil {
 		return err
 	}
+	swaggerSpec, err := loads.Embedded(restapi.SwaggerJSON, restapi.FlatSwaggerJSON)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	api := operations.NewServerAPI(swaggerSpec)
+	server := restapi.NewServer(api)
+	restapi.SetManager(pd.vmmManager)
+	server.ConfigureFlags()
+	server.ConfigureAPI()
+	os.RemoveAll("/tmp/promethium")
+	server.EnabledListeners = append(server.EnabledListeners, "unix", "http")
+
+	server.Host = pd.config.API.BindAddress
+	server.Port = int(pd.config.API.Port)
+	server.SocketPath = "/tmp/promethium"
+
+	go func() {
+		println("Serving")
+		err := server.Serve()
+		if err != nil {
+			println(err.Error())
+		}
+	}()
 
 	//start api...
-	pd.api = api.NewRouter(pd.vmmManager)
-	server := http.Server{
-		Handler: pd.api,
-	}
-	os.RemoveAll("/tmp/promethium")
-	unixListener, err := net.Listen("unix", "/tmp/promethium")
-	go func() {
-		log.Printf("Listening on Unix Socket...")
-		server.Serve(unixListener)
-	}()
-	go func() {
-		addr := fmt.Sprintf("%s:%d", pd.config.API.BindAddress, pd.config.API.Port)
-		log.Printf("Listening on %s...", addr)
-		http.ListenAndServe(addr, pd.api)
-	}()
+	// pd.api = api.MakeNewApiRouter(pd.vmmManager)
+	// server := http.Server{
+	// 	Handler: pd.api,
+	// }
+	// os.RemoveAll("/tmp/promethium")
+	// unixListener, err := net.Listen("unix", "/tmp/promethium")
+	// go func() {
+	// 	log.Printf("Listening on Unix Socket...")
+	// 	server.Serve(unixListener)
+	// }()
+	// go func() {
+	// 	addr := fmt.Sprintf("%s:%d", pd.config.API.BindAddress, pd.config.API.Port)
+	// 	log.Printf("Listening on %s...", addr)
+	// 	http.ListenAndServe(addr, pd.api)
+	// }()
 
 	return nil
 

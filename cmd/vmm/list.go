@@ -1,7 +1,6 @@
 package vmm
 
 import (
-	"context"
 	"os"
 
 	"github.com/landoop/tableprinter"
@@ -20,12 +19,12 @@ var ListInstancesCommand = cli.Command{
 	Action: func(c *cli.Context) error {
 		printer := tableprinter.New(os.Stdout)
 		printer.Render([]string{"ID"}, nil, nil, false)
-		list, _, err := ApiCli.VmsApi.GetVMList(context.Background(), nil)
+		list, err := ApiCli.Vms.GetVMList(nil)
 		if err != nil {
 			return err
 		}
-		for _, item := range list {
-			printer.RenderRow([]string{item.Id}, nil)
+		for _, item := range list.Payload {
+			printer.RenderRow([]string{item.ID.String()}, nil)
 		}
 		return nil
 	},

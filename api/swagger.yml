@@ -1,837 +1,1874 @@
 ---
-swagger: "2.0"
-info:
-  description: API for Promethium Daemon
-  title: Promethium Daemon API
-  version: 1.0.0
-consumes:
-  - application/com.768bit.promethium.daemon.v1+json
-produces:
-  - application/com.768bit.promethium.daemon.v1+json
-schemes:
-  - http
-paths:
-  /vms:
-    get:
-      tags:
-        - vms
-      summary: "Get a list of VMs"
-      description: "Returns a list of VMs"
-      operationId: "getVMList"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: since
-          in: query
-          type: integer
-          format: int64
-        - name: limit
-          in: query
-          type: integer
-          format: int32
-          default: 20
-      responses:
-        200:
-          description: "Array of VMs"
-          schema:
-            type: "array"
-            items:
-              $ref: '#/definitions/VMListItem'
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: '#/definitions/error'
-    post:
-      tags:
-        - vms
-      summary: "Create a VM instance"
-      description: "Create an instance of VM"
-      operationId: "createVM"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmConfig"
-          in: "body"
-          description: "Create new VM instance"
-          required: true
-          schema:
-            $ref: "#/definitions/NewVM"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VM"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}:
-    get:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "getVM"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VM"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-    put:
-      tags:
-        - vms
-      summary: "Create a VM instance"
-      description: "Create an instance of VM"
-      operationId: "updateVM"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "vmConfig"
-          in: "body"
-          description: "Pet to add to the store"
-          required: true
-          schema:
-            $ref: "#/definitions/UpdateVM"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VM"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-    delete:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "deleteVM"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/item"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/interfaces:
-    get:
-      tags:
-        - vms
-      summary: "Get a list of VM Network Interfaces"
-      description: "Returns a list of VM Network Itnerfaces"
-      operationId: "getVMInterfaceList"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: since
-          in: query
-          type: integer
-          format: int64
-        - name: limit
-          in: query
-          type: integer
-          format: int32
-          default: 20
-      responses:
-        200:
-          description: "Array of VMs"
-          schema:
-            type: "array"
-            items:
-              $ref: '#/definitions/VMInterface'
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: '#/definitions/error'
-    post:
-      tags:
-        - vms
-      summary: "Create a VM instance"
-      description: "Create an instance of VM"
-      operationId: "createVMInterface"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: "vmConfig"
-          in: "body"
-          description: "Create new VM instance"
-          required: true
-          schema:
-            $ref: "#/definitions/NewVMInterface"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VMInterface"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/interfaces/{interfaceID}:
-    get:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "getVMInterace"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "interfaceID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: '#/definitions/VMInterface'
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-    put:
-      tags:
-        - vms
-      summary: "Update a VM Interface instance"
-      description: "Update an instance of VM interface"
-      operationId: "updateVMInterface"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "interfaceID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-        - name: "vmInterfaceConfig"
-          in: "body"
-          description: "Pet to add to the store"
-          required: true
-          schema:
-            $ref: "#/definitions/UpdateVMInterface"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VMInterface"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM Interface not found"
-    delete:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "deleteVMInterface"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "interfaceID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/item"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/drives:
-    get:
-      tags:
-        - vms
-      summary: "Get a list of VM Network Interfaces"
-      description: "Returns a list of VM Network Itnerfaces"
-      operationId: "getVMDriveList"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: since
-          in: query
-          type: integer
-          format: int64
-        - name: limit
-          in: query
-          type: integer
-          format: int32
-          default: 20
-      responses:
-        200:
-          description: "Array of VMs"
-          schema:
-            type: "array"
-            items:
-              $ref: '#/definitions/VMDrive'
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: '#/definitions/error'
-    post:
-      tags:
-        - vms
-      summary: "Create a VM instance"
-      description: "Create an instance of VM"
-      operationId: "createVMDrive"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: "vmConfig"
-          in: "body"
-          description: "Create new VM instance"
-          required: true
-          schema:
-            $ref: "#/definitions/NewVMDrive"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VMDrive"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/drives/{driveID}:
-    get:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "getVMDrive"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "driveID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: '#/definitions/VMDrive'
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-    put:
-      tags:
-        - vms
-      summary: "Update a VM Interface instance"
-      description: "Update an instance of VM interface"
-      operationId: "updateVMDrive"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "driveID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-        - name: "vmInterfaceConfig"
-          in: "body"
-          description: "Pet to add to the store"
-          required: true
-          schema:
-            $ref: "#/definitions/UpdateVMInterface"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/UpdateVMDrive"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM Interface not found"
-    delete:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "deleteVMDrive"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "driveID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/item"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/volumes:
-    get:
-      tags:
-        - vms
-      summary: "Get a list of VM Network Interfaces"
-      description: "Returns a list of VM Network Itnerfaces"
-      operationId: "getVMVolumeList"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: since
-          in: query
-          type: integer
-          format: int64
-        - name: limit
-          in: query
-          type: integer
-          format: int32
-          default: 20
-      responses:
-        200:
-          description: "Array of VMs"
-          schema:
-            type: "array"
-            items:
+  swagger: "2.0"
+  info:
+    description: API for Promethium Daemon
+    title: Promethium Daemon API
+    version: 1.0.0
+
+  produces:
+  - "application/json"
+  consumes:
+  - "application/json"
+  schemes:
+    - http
+  paths:
+    /networking:
+      get:
+        tags:
+          - networking
+        description: Get all networks
+        operationId: "getNetworkList"
+        produces:
+          - "application/json"
+
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/Network'
+      post:
+        tags:
+          - networking
+        description: Create new network
+        operationId: "createNetwork"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "netConfig"
+            in: "body"
+            description: "Create new Network (bridge)"
+            required: true
+            schema:
+              $ref: "#/definitions/NewNetwork"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Network"
+    /networking/physicalInterfaces:
+      get:
+        tags:
+          - networking
+        description: Get all physical interfaces
+        operationId: "getPhysicalInterfaces"
+        produces:
+          - "application/json"
+
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/PhysicalInterface'
+    /networking/{networkID}:
+      get:
+        tags:
+          - networking
+        description: Get a network (bridge)
+        operationId: "getNetwork"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "networkID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Network"
+      put:
+        tags:
+          - networking
+        description: Update network
+        operationId: "updateNetwork"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "networkID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "netConfig"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateNetwork"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Network"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "Storage not found"
+      delete:
+        tags:
+          - networking
+        description: Get a network (bridge)
+        operationId: "destroyNetwork"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "networkID"
+            in: "path"
+            description: "ID of Network to delete"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Network"
+    /networking/{networkID}/interfaces:
+      get:
+        tags:
+          - networking
+        description: Get a network (bridge) interfaces
+        operationId: "getNetworkInterfaces"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "networkID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: array
+              items:
+                $ref: "#/definitions/NetworkInterface"
+    /storage:
+      get:
+        tags:
+          - storage
+        description: Get all storage
+        operationId: "getStorageList"
+        produces:
+          - "application/json"
+
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: array
+              items:
+                $ref: "#/definitions/Storage"
+      post:
+        tags:
+          - storage
+        description: Create new storage
+        operationId: "createStorage"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "storageConfig"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/NewStorage"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Storage"
+    /storage/{storageID}:
+      get:
+        tags:
+          - storage
+        description: Get storage item
+        operationId: "getStorage"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of Storage to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Storage"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "Storage not found"
+      put:
+        tags:
+          - storage
+        description: Update storage item
+        operationId: "updateStorage"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "storageConfig"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateStorage"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/Storage"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "Storage not found"
+      delete:
+        tags:
+          - storage
+        description: Remove storage item
+        operationId: "destroyStorage"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          '200':
+            description: OK
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "Storage not found"
+    /storage/{storageID}/disks:
+      get:
+        tags:
+          - storage
+        description: Get storage item
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: array
+              items:
+                $ref: "#/definitions/StorageDisk"
+    /storage/{storageID}/kernels:
+      get:
+        tags:
+          - storage
+        description: Get storage item
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: array
+              items:
+                $ref: "#/definitions/StorageKernel"
+    /storage/{storageID}/images:
+      get:
+        tags:
+          - storage
+        description: Get storage item
+        parameters:
+          - name: "storageID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          '200':
+            description: OK
+            schema:
+              type: array
+              items:
+                $ref: "#/definitions/StorageImage"
+    /vms:
+      get:
+        tags:
+          - vms
+        summary: "Get a list of VMs"
+        description: "Returns a list of VMs"
+        operationId: "getVMList"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: since
+            in: query
+            type: integer
+            format: int64
+          - name: limit
+            in: query
+            type: integer
+            format: int32
+            default: 20
+          - name: skip
+            in: query
+            type: integer
+            format: int32
+            default: 0
+        responses:
+          200:
+            description: "Array of VMs"
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/VMListItem'
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      post:
+        tags:
+          - vms
+        summary: "Create a VM instance"
+        description: "Create an instance of VM"
+        operationId: "createVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmConfig"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/NewVM"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}:
+      get:
+        tags:
+          - vms
+        summary: "Return a VM instance"
+        description: "Returns an isntance of VM"
+        operationId: "getVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+      put:
+        tags:
+          - vms
+        summary: "Update a VM instance"
+        description: "Update an instance of VM"
+        operationId: "updateVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "vmConfig"
+            in: "body"
+            description: "Pet to add to the store"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateVM"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+      delete:
+        tags:
+          - vms
+        summary: "Destroy a VM instance"
+        description: "Destroy an isntance of VM"
+        operationId: "deleteVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/item"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/start:
+      get:
+        tags:
+          - vms
+        summary: "Start a VM instance"
+        description: "Starts an isntance of VM"
+        operationId: "startVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/stop:
+      get:
+        tags:
+          - vms
+        summary: "Stop a VM instance"
+        description: "Stops an isntance of VM"
+        operationId: "stopVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/console:
+      get:
+        tags:
+          - vms
+        summary: "Get a console for a VM instance"
+        description: "Get a console for a VM instance"
+        operationId: "getVMConsole"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/interfaces:
+      get:
+        tags:
+          - vms
+        summary: "Get a list of VM Network Interfaces"
+        description: "Returns a list of VM Network Itnerfaces"
+        operationId: "getVMInterfaceList"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: limit
+            in: query
+            type: integer
+            format: int32
+            default: 20
+          - name: skip
+            in: query
+            type: integer
+            format: int32
+            default: 0
+        responses:
+          200:
+            description: "Array of VM Network Interfaces"
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/MetaDataNetworkInterfaceConfig'
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      post:
+        tags:
+          - vms
+        summary: "Create a new VM Network Itnerface"
+        description: "Create a new VM Network Itnerface"
+        operationId: "createVMInterface"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: "interfaceConfig"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/NewVMInterface"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/MetaDataNetworkInterfaceConfig"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /vms/{vmID}/interfaces/{interfaceID}:
+      get:
+        tags:
+          - vms
+        summary: "Return a VM Network Interface"
+        description: "Returns an instance of VM Network Interface"
+        operationId: "getVMInterace"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "interfaceID"
+            in: "path"
+            description: "ID of VM Interface to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: '#/definitions/MetaDataNetworkInterfaceConfig'
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      put:
+        tags:
+          - vms
+        summary: "Update a VM Network Interface instance"
+        description: "Update an instance of VM Network Interface"
+        operationId: "updateVMInterface"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "interfaceID"
+            in: "path"
+            description: "ID of VM Interface to use"
+            required: true
+            type: "string"
+          - name: "vmInterfaceConfig"
+            in: "body"
+            description: "Updated VM Interface Config"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateVMInterface"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/MetaDataNetworkInterfaceConfig"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM Interface not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      delete:
+        tags:
+          - vms
+        summary: "Destroy a VM Network Interface"
+        description: "Destroy a VM Network Interface"
+        operationId: "deleteVMInterface"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "interfaceID"
+            in: "path"
+            description: "ID of VM Interface to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/item"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /vms/{vmID}/disks:
+      get:
+        tags:
+          - vms
+        summary: "Get a list of VM Attached Disks"
+        description: "Returns a list of VM Attached Disks"
+        operationId: "getVMDiskList"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: limit
+            in: query
+            type: integer
+            format: int32
+            default: 20
+          - name: skip
+            in: query
+            type: integer
+            format: int32
+            default: 0
+        responses:
+          200:
+            description: "Array of Disks"
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/VMDisk'
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      post:
+        tags:
+          - vms
+        summary: "Create or attach a VM Disk"
+        description: "Create or attach a VM Disk"
+        operationId: "createVMDisk"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: "vmDiskConfid"
+            in: "body"
+            description: "Create new VM instance"
+            required: true
+            schema:
+              $ref: "#/definitions/NewVMDisk"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VMDisk"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /vms/{vmID}/disks/{diskID}:
+      get:
+        tags:
+          - vms
+        summary: "Return a VM Disk"
+        description: "Returns an isntance of VM Disk"
+        operationId: "getVMDisk"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "diskID"
+            in: "path"
+            description: "ID of VM Disk to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: '#/definitions/VMDisk'
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM or Disk not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      put:
+        tags:
+          - vms
+        summary: "Update a VM Interface instance"
+        description: "Update an instance of VM interface"
+        operationId: "updateVMDisk"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "diskID"
+            in: "path"
+            description: "ID of VM Disk to use"
+            required: true
+            type: "string"
+          - name: "vmDiskConfig"
+            in: "body"
+            description: "Pet to add to the store"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateVMDisk"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/UpdateVMDisk"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM Interface not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      delete:
+        tags:
+          - vms
+        summary: "Return a VM instance"
+        description: "Returns an isntance of VM"
+        operationId: "deleteVMDrive"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "diskID"
+            in: "path"
+            description: "ID of VM Interface to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/item"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /vms/{vmID}/volumes:
+      get:
+        tags:
+          - vms
+        summary: "Get a list of VM Volumes"
+        description: "Returns a list of VM Volumes"
+        operationId: "getVMVolumeList"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: limit
+            in: query
+            type: integer
+            format: int32
+            default: 20
+          - name: skip
+            in: query
+            type: integer
+            format: int32
+            default: 0
+        responses:
+          200:
+            description: "Array of VM Volumes"
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/VMVolume'
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      post:
+        tags:
+          - vms
+        summary: "Create or attach a VM Volume"
+        description: "Create or attach a VM Volume"
+        operationId: "createVMVolume"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to use"
+            required: true
+            type: "string"
+          - name: "volumeConfig"
+            in: "body"
+            description: "VM Volume Config"
+            required: true
+            schema:
+              $ref: "#/definitions/NewVMVolume"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VMVolume"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /vms/{vmID}/volumes/{volumeID}:
+      get:
+        tags:
+          - vms
+        summary: "Return a VM instance"
+        description: "Returns an isntance of VM"
+        operationId: "getVMVolume"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "volumeID"
+            in: "path"
+            description: "ID of VM Volume to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
               $ref: '#/definitions/VMVolume'
-        default:
-          description: "unexpected error"
-          schema:
-            $ref: '#/definitions/error'
-    post:
-      tags:
-        - vms
-      summary: "Create a VM instance"
-      description: "Create an instance of VM"
-      operationId: "createVMVolume"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to use"
-          required: true
-          type: "string"
-        - name: "vmConfig"
-          in: "body"
-          description: "Create new VM instance"
-          required: true
-          schema:
-            $ref: "#/definitions/NewVMVolume"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/VMInterface"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-  /vms/{vmID}/volumes/{volumeID}:
-    get:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "getVMVolume"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "volumeID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: '#/definitions/VMVolume'
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-    put:
-      tags:
-        - vms
-      summary: "Update a VM Interface instance"
-      description: "Update an instance of VM interface"
-      operationId: "updateVMVolume"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "volumeID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-        - name: "vmInterfaceConfig"
-          in: "body"
-          description: "Pet to add to the store"
-          required: true
-          schema:
-            $ref: "#/definitions/UpdateVMVolume"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      put:
+        tags:
+          - vms
+        summary: "Update a VM Interface instance"
+        description: "Update an instance of VM interface"
+        operationId: "updateVMVolume"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "volumeID"
+            in: "path"
+            description: "ID of VM Volume to use"
+            required: true
+            type: "string"
+          - name: "vmInterfaceConfig"
+            in: "body"
+            description: "Pet to add to the store"
+            required: true
+            schema:
+              $ref: "#/definitions/UpdateVMVolume"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VMVolume"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM Interface not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      delete:
+        tags:
+          - vms
+        summary: "Return a VM instance"
+        description: "Returns an isntance of VM"
+        operationId: "deleteVMVolume"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+          - name: "volumeID"
+            in: "path"
+            description: "ID of VM Interface to use"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/item"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /images:
+      get:
+        tags:
+          - images
+        summary: "Get a list of Images"
+        description: "Returns a list of Images"
+        operationId: "getImagesList"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: since
+            in: query
+            type: integer
+            format: int64
+          - name: limit
+            in: query
+            type: integer
+            format: int32
+            default: 20
+          - name: skip
+            in: query
+            type: integer
+            format: int32
+            default: 0
+        responses:
+          200:
+            description: "Array of Images"
+            schema:
+              type: "array"
+              items:
+                $ref: '#/definitions/Image'
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+      post:
+        tags:
+          - vms
+        summary: "Create a new Image"
+        description: "Create a new Image"
+        operationId: "createImage"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "imageConfig"
+            in: "body"
+            description: "Create new Image"
+            required: true
+            schema:
+              $ref: "#/definitions/NewImage"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+  definitions:
+    Image:
+      type: object
+      properties:
+        ID:
+          type: string
+        Name:
+          type: string
+        Version:
+          type: string
+        Type:
+          type: string
+          enum:
+          - standard
+          - osv
+          - qemu
+        Size:
+          type: integer
+          format: int64
+        Source:
+          type: string
+          enum:
+          - promethium
+          - docker
+          - tar
+          - raw
+          - qcow2
+          - capstan
+        SourceURI:
+          type: string
+        ImageHash:
+          type: string
+        BootParams:
+          type: string
+        KernelHash:
+          type: string
+        Architecture:
+          type: string
+          enum:
+          - x86_64
+          - aarch64
+        CreatedAt:
+          type: string
+          format: date-time
+      xml:
+        name: "Image"
+    NewImage:
+      type: object
+      properties:
+        operation:
+          type: string
+          enum:
+          - clone
+          - build
+        buildContext:
+          type: string
+          format: byte
+        buildContextType:
+          type: string
+          enum:
+          - promethium
+          - docker
+          - tar
+          - raw
+          - qcow2
+          - capstan
+        buildContextImageType:
+          type: string
+          enum:
+          - standard
+          - osv
+          - qemu
+        cloneFrom:
+          type: string
+      required:
+      - operation
+      xml:
+        name: "NewImage"
+    item:
+      type: object
+      required:
+        - description
+      properties:
+        id:
+          type: integer
+          format: int64
+          readOnly: true
+        description:
+          type: string
+          minLength: 1
+        completed:
+          type: boolean
+    error:
+      type: object
+      required:
+        - message
+      properties:
+        code:
+          type: integer
+          format: int64
+        message:
+          type: string
+    VMListItem:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+        status:
+          type: string
+          description: "VM status"
+          enum:
+            - "starting"
+            - "started"
+            - "restarting"
+            - "stopping"
+            - "stopped"
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+      xml:
+        name: "VMListItem"
+    NewVM:
+      type: "object"
+      properties:
+        name:
+          type: string
+        cpus:
+          type: integer
+          format: int64
+        memory:
+          type: integer
+          format: int64
+        fromImage:
+          type: string
+        rootDiskSize:
+          type: integer
+          format: int64
+        primaryNetworkID:
+          type: string
+        storageName:
+          type: string
+        autoStart:
+          type: boolean
+      xml:
+        name: "NewVM"
+    UpdateVM:
+      type: "object"
+      properties:
+        name:
+          type: string
+        cpus:
+          type: integer
+          format: int64
+        memory:
+          type: integer
+          format: int64
+        bootCmd:
+          type: string
+        entryPoint:
+          type: string
+        autoStart:
+          type: boolean
+      xml:
+        name: "UpdateVM"
+    VM:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+        status:
+          type: string
+          description: "VM status"
+          enum:
+            - "starting"
+            - "started"
+            - "restarting"
+            - "stopping"
+            - "stopped"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        stoppedAt:
+          type: string
+          format: date-time
+        name:
+          type: string
+        clustered:
+          type: boolean
+        clusterID:
+          type: string
+          format: uuid4
+        hostNode:
+          type: string
+        hostNodeID:
+          type: string
+          format: uuid4
+        cpus:
+          type: integer
+          format: int64
+        memory:
+          type: integer
+          format: int64
+        "type":
+          type: string
+          enum:
+          - firecracker-standard
+          - firecracker-osv
+          - qemu-standard
+        volumes:
+          type: "array"
+          xml:
+            name: "volume"
+            wrapped: true
+          items:
             $ref: "#/definitions/VMVolume"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM Interface not found"
-    delete:
-      tags:
-        - vms
-      summary: "Return a VM instance"
-      description: "Returns an isntance of VM"
-      operationId: "deleteVMVolume"
-      produces:
-        - "application/json"
-        - "application/xml"
-      parameters:
-        - name: "vmID"
-          in: "path"
-          description: "ID of VM to return"
-          required: true
-          type: "string"
-        - name: "volumeID"
-          in: "path"
-          description: "ID of VM Interface to use"
-          required: true
-          type: "string"
-      responses:
-        200:
-          description: "successful operation"
-          schema:
-            $ref: "#/definitions/item"
-        400:
-          description: "Invalid ID supplied"
-        404:
-          description: "VM not found"
-definitions:
-  item:
-    type: object
-    required:
-      - description
-    properties:
-      id:
-        type: integer
-        format: int64
-        readOnly: true
-      description:
-        type: string
-        minLength: 1
-      completed:
-        type: boolean
-  error:
-    type: object
-    required:
-      - message
-    properties:
-      code:
-        type: integer
-        format: int64
-      message:
-        type: string
-  VMListItem:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-      status:
-        type: string
-        description: "VM status"
-        enum:
-          - "starting"
-          - "started"
-          - "restarting"
-          - "stopping"
-          - "stopped"
-      name:
-        type: string
-    xml:
-      name: "VMListItem"
-  NewVM:
-    type: "object"
-    properties:
-      name:
-        type: string
-      cpus:
-        type: integer
-        format: int64
-      memory:
-        type: integer
-        format: int64
-      volumes:
-        type: "array"
-        xml:
-          name: "volume"
-          wrapped: true
-        items:
-          $ref: "#/definitions/VMVolume"
-      drives:
-        type: "array"
-        xml:
-          name: "drive"
-          wrapped: true
-        items:
-          $ref: "#/definitions/VMDrive"
-      interfaces:
-        type: "array"
-        xml:
-          name: "interface"
-          wrapped: true
-        items:
-          $ref: '#/definitions/VMInterface'
-    xml:
-      name: "NewVM"
-  UpdateVM:
-    type: "object"
-    properties:
-      name:
-        type: string
-      cpus:
-        type: integer
-        format: int64
-      memory:
-        type: integer
-        format: int64
-    xml:
-      name: "UpdateVM"
-  VM:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-      status:
-        type: string
-        description: "VM status"
-        enum:
-          - "starting"
-          - "started"
-          - "restarting"
-          - "stopping"
-          - "stopped"
-      name:
-        type: string
-      cpus:
-        type: integer
-        format: int64
-      memory:
-        type: integer
-        format: int64
-      volumes:
-        type: "array"
-        xml:
-          name: "volume"
-          wrapped: true
-        items:
-          $ref: "#/definitions/VMVolume"
-      drives:
-        type: "array"
-        xml:
-          name: "drive"
-          wrapped: true
-        items:
-          $ref: "#/definitions/VMDrive"
-      interfaces:
-        type: "array"
-        xml:
-          name: "interface"
-          wrapped: true
-        items:
-          $ref: "#/definitions/VMInterface"
-    xml:
-      name: "VM"
-  VMVolume:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMVolume"
-  UpdateVMVolume:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMVolume"
-  NewVMVolume:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMVolume"
-  VMDrive:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMDrive"
-  UpdateVMDrive:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMDrive"
-  NewVMDrive:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMDrive"
-  VMInterface:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMInterface"
-  NewVMInterface:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMInterface"
-  UpdateVMInterface:
-    type: "object"
-    properties:
-      id:
-        type: string
-        format: "uuid4"
-    xml:
-      name: "VMInterface"
+        disks:
+          type: "array"
+          xml:
+            name: "disk"
+            wrapped: true
+          items:
+            $ref: "#/definitions/VMDisk"
+        network:
+          $ref: "#/definitions/MetaDataNetworkConfig"
+        bootCmd:
+          type: string
+        entryPoint:
+          type: string
+        autoStart:
+          type: boolean
+      xml:
+        name: "VM"
+    VMVolume:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+      xml:
+        name: "VMVolume"
+    UpdateVMVolume:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+      xml:
+        name: "VMVolume"
+    NewVMVolume:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+      xml:
+        name: "VMVolume"
+    VMDisk:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+        size:
+          type: integer
+          format: int64
+        isRoot:
+          type: boolean
+        storageURI:
+          type: string
+      xml:
+        name: "VMDisk"
+    UpdateVMDisk:
+      type: "object"
+      properties:
+        size:
+          type: integer
+          format: int64
+        isRoot:
+          type: boolean
+        storageURI:
+          type: string
+      xml:
+        name: "UpdateVMDisk"
+    NewVMDisk:
+      type: "object"
+      properties:
+        size:
+          type: integer
+          format: int64
+        isRoot:
+          type: boolean
+        backendStorageID:
+          type: string
+      xml:
+        name: "NewVMDisk"
+    VMInterface:
+      type: "object"
+      properties:
+        id:
+          type: string
+          format: "uuid4"
+        networkID:
+          type: string
+          format: "uuid4"
+        config:
+          $ref: ""
+      xml:
+        name: "VMInterface"
+
+
+    MetaDataNetworkConfig:
+      type: object
+      properties:
+        interfaces:
+          type: array
+          items:
+            $ref: "#/definitions/MetaDataNetworkInterfaceConfig"
+        bonds:
+          type: object
+          additionalProperties:
+            $ref: "#/definitions/MetaDataNetworkBondsConfig"
+        bridges:
+          type: object
+          additionalProperties:
+            $ref: "#/definitions/MetaDataNetworkBridgesConfig"
+        vlans:
+          type: object
+          additionalProperties:
+            $ref: "#/definitions/MetaDataNetworkVlansConfig"
+        routes:
+          type: array
+          xml:
+            name: "route"
+            wrapped: true
+          items:
+            $ref: "#/definitions/MetaDataNetworkRoutesConfig"
+      xml:
+        name: "network"
+
+    MetaDataNetworkInterfaceConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        networkID:
+          type: string
+        macAddress:
+          type: string
+        config:
+          $ref: "#/definitions/MetaDataNetworkEthernetsConfig"
+
+    MetaDataNetworkEthernetsConfig:
+      type: "object"
+      properties:
+        # match:
+        #   $ref: "#/definitions/MetaDataNetworkEthernetsMatchConfig"
+        # setName:
+        #   type: string
+        dhcp4:
+          type: boolean
+        dhcp6:
+          type: boolean
+        addresses:
+          type: array
+          items:
+            type: string
+        gateway4:
+          type: string
+          format: ipv4
+        gateway6:
+          type: string
+          format: ipv6
+        nameservers:
+          $ref: "#/definitions/MetaDataNetworkEthernetsDNSConfig"
+        mtu:
+          type: integer
+          format: int32
+        routes:
+          type: array
+          items:
+            $ref: "#/definitions/MetaDataNetworkRoutesConfig"
+      xml:
+        name: "ethernet"
+    MetaDataNetworkEthernetsMatchConfig:
+      type: object
+      properties:
+        macaddress:
+          type: string
+        driver:
+          type: string
+        name:
+          type: string
+    MetaDataNetworkEthernetsDNSConfig:
+      type: object
+      properties:
+        search:
+          type: array
+          items:
+            type: string
+            format: hostname
+        addresses:
+          type: array
+          items:
+            type: string
+    MetaDataNetworkBondsConfig:
+      type: object
+      properties:
+        interfaces:
+          type: array
+          items:
+            type: string
+        dhcp4:
+          type: boolean
+        dhcp6:
+          type: boolean
+        addresses:
+          type: array
+          items:
+            type: string
+        gateway4:
+          type: string
+          format: ipv4
+        gateway6:
+          type: string
+          format: ipv6
+        nameservers:
+          $ref: "#/definitions/MetaDataNetworkEthernetsDNSConfig"
+        mtu:
+          type: integer
+          format: int32
+        routes:
+          type: array
+          items:
+            $ref: "#/definitions/MetaDataNetworkRoutesConfig"
+        mode:
+          type: string
+          enum:
+          - balance-rr
+          - active-backup
+          - balance-xor
+          - broadcast
+          - 802.3ad
+          - balance-tlb
+          - balance-alb
+        lacp-rate:
+          type: string
+          enum:
+          - slow
+          - fast
+        mii-monitor-interval:
+          type: integer
+          format: int32
+        min-links:
+          type: integer
+          format: int32
+        transmit-hash-policy:
+          type: string
+          enum:
+          - layer2
+          - layer2+3
+          - layer3+4
+          - encap2+3
+          - encap3+4
+        ad-select:
+          type: string
+          enum:
+          - stable
+          - bandwidth
+          - count
+        all-slaves-active:
+          type: boolean
+        arp-interval:
+          type: integer
+          format: int32
+        arp-ip-targets:
+          type: array
+          items:
+            type: string
+            format: ipv4
+          maxItems: 16
+        arp-validate:
+          type: string
+          enum:
+          - none
+          - active
+          - backup
+          - all
+        arp-all-targets:
+          type: string
+          enum:
+          - any
+          - all
+        up-delay:
+          type: integer
+          format: int32
+        down-delay:
+          type: integer
+          format: int32
+        fail-over-mac-policy:
+          type: string
+          enum:
+          - none
+          - active
+          - follow
+        gratuitous-arp:
+          type: integer
+          format: int32
+        packets-per-slave:
+          type: integer
+          format: int32
+        primary-reselect-policy:
+          type: string
+          enum:
+          - always
+          - better
+          - failure
+        learn-packet-interval:
+          type: integer
+          format: int32
+      xml:
+        name: "bond"
+
+
+
+
+
+    MetaDataNetworkBridgesConfig:
+      type: object
+      properties:
+        interfaces:
+          type: array
+          items:
+            type: string
+        dhcp4:
+          type: boolean
+        dhcp6:
+          type: boolean
+        addresses:
+          type: array
+          items:
+            type: string
+        gateway4:
+          type: string
+          format: ipv4
+        gateway6:
+          type: string
+          format: ipv6
+        nameservers:
+          $ref: "#/definitions/MetaDataNetworkEthernetsDNSConfig"
+        mtu:
+          type: integer
+          format: int32
+        routes:
+          type: array
+          items:
+            $ref: "#/definitions/MetaDataNetworkRoutesConfig"
+        ageing-time:
+          type: integer
+          format: int32
+        priority:
+          type: integer
+          format: int32
+        forward-delay:
+          type: integer
+          format: int32
+        hello-time:
+          type: integer
+          format: int32
+        max-age:
+          type: integer
+          format: int32
+        path-cost:
+          type: integer
+          format: int32
+        stp:
+          type: boolean
+          default: true
+      xml:
+        name: "bridge"
+
+
+    MetaDataNetworkVlansConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int32
+        link:
+          type: string
+        dhcp4:
+          type: boolean
+        dhcp6:
+          type: boolean
+        addresses:
+          type: array
+          items:
+            type: string
+        gateway4:
+          type: string
+          format: ipv4
+        gateway6:
+          type: string
+          format: ipv6
+        nameservers:
+          $ref: "#/definitions/MetaDataNetworkEthernetsDNSConfig"
+        mtu:
+          type: integer
+          format: int32
+        routes:
+          type: array
+          items:
+            $ref: "#/definitions/MetaDataNetworkRoutesConfig"
+      xml:
+        name: "vlan"
+
+
+
+    MetaDataNetworkRoutesConfig:
+      type: object
+      properties:
+        to:
+          type: string
+        via:
+          type: string
+        metric:
+          type: integer
+          format: int32
+      xml:
+        name: "route"
+
+
+    NewVMInterface:
+      type: "object"
+      properties:
+        networkID:
+          type: string
+        macAddress:
+          type: string
+        config:
+          $ref: "#/definitions/MetaDataNetworkEthernetsConfig"
+      xml:
+        name: "NewVMInterface"
+    UpdateVMInterface:
+      type: "object"
+      properties:
+        networkID:
+          type: string
+        macAddress:
+          type: string
+        config:
+          $ref: "#/definitions/MetaDataNetworkEthernetsConfig"
+      xml:
+        name: "UpdateVMInterface"
+
+    PhysicalInterface:
+      type: object
+      properties:
+        name:
+          type: string
+        macAddress:
+          type: string
+        mtu:
+          type: integer
+          format: int32
+        addresses:
+          type: array
+          items:
+            type: string
+
+    NewNetwork:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - linux
+          - ovs
+        physicalInterface:
+          type: string
+      required:
+        - type
+        - physicalInterface
+
+    Network:
+      type: object
+
+    NetworkMasterInterface:
+      type: object
+      properties:
+        device:
+          type: string
+        enabled:
+          type: boolean
+
+    NetworkIP4Config:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        dhcp:
+          type: boolean
+        address:
+          type: string
+          format: ipv4
+        gateway:
+          type: string
+          format: ipv4
+        vlan:
+          type: integer
+          format: int32
+
+    UpdateNetwork:
+      type: object
+
+    NetworkInterface:
+      type: object
+
+    NewStorage:
+      type: object
+
+    Storage:
+      type: object
+
+    UpdateStorage:
+      type: object
+
+    StorageDisk:
+      type: object
+
+    StorageKernel:
+      type: object
+
+    StorageImage:
+      type: object

@@ -3,7 +3,7 @@ package vmm
 import (
 	"errors"
 
-	"github.com/768bit/promethium/api/client"
+	client "github.com/768bit/promethium/api/client"
 	"github.com/768bit/promethium/cmd/common"
 	"github.com/urfave/cli/v2"
 )

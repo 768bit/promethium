@@ -65,8 +65,21 @@ func CopyAssets() error {
 
 }
 
+func SwaggerGen() error {
+	//swagger generate server --skip-models -f ./swagger.yml -A server
+	cmd := vutils.Exec.CreateAsyncCommand("swagger", false, "generate", "server", "--skip-models", "-f", "./swagger.yml", "-A", "server")
+	err := cmd.BindToStdoutAndStdErr().SetWorkingDir(filepath.Join(CWD, "api")).CopyEnv().StartAndWait()
+	if err != nil {
+		return err
+	}
+	//swagger generate client -f ./swagger.yml -A promethium
+	cmd = vutils.Exec.CreateAsyncCommand("swagger", false, "generate", "client", "--skip-models", "-f", "./swagger.yml", "-A", "promethium")
+	return cmd.BindToStdoutAndStdErr().SetWorkingDir(filepath.Join(CWD, "api")).CopyEnv().StartAndWait()
+}
+
 func Build() error {
 	mg.Deps(InitialiseVersionData)
+	//mg.Deps(SwaggerGen)
 	if err := packAssets(); err != nil {
 		return err
 	}
@@ -113,71 +126,71 @@ func cleanPackedAssets() error {
 	return nil
 }
 
-var ImagesMap = []images.ImageBuildSpec{
-	{
-		Name:         "ubuntu",
-		Version:      "bionic",
-		RootFs:       "ext4",
-		SourceURI:    "ubuntu:bionic",
-		Type:         images.StandardImage,
-		BuildScript:  filepath.Join(SCRIPTS, "build-fc-ubuntu.sh"),
-		Size:         1 * 1024 * 1024 * 1024,
-		Source:       images.DockerImage,
-		Architecture: images.X86_64,
-	},
-	{
-		Name:         "ubuntu",
-		Version:      "bionic-cloud",
-		RootFs:       "ext4",
-		SourceURI:    "ubuntu:bionic",
-		Type:         images.StandardImage,
-		BuildScript:  filepath.Join(SCRIPTS, "build-fc-ubuntu-cloud.sh"),
-		Size:         1 * 1024 * 1024 * 1024,
-		Source:       images.DockerImage,
-		Architecture: images.X86_64,
-	},
-	{
-		Name:         "alpine",
-		Version:      "3.10",
-		RootFs:       "ext4",
-		SourceURI:    "alpine:3.10",
-		Type:         images.StandardImage,
-		BuildScript:  filepath.Join(SCRIPTS, "build-fc-alpine.sh"),
-		Size:         1 * 1024 * 1024 * 1024,
-		Source:       images.DockerImage,
-		Architecture: images.X86_64,
-	},
-	{
-		Name:         "alpine",
-		Version:      "3.10-cloud",
-		RootFs:       "ext4",
-		SourceURI:    "alpine:3.10",
-		Type:         images.StandardImage,
-		BuildScript:  filepath.Join(SCRIPTS, "build-fc-alpine-cloud.sh"),
-		Size:         1 * 1024 * 1024 * 1024,
-		Source:       images.DockerImage,
-		Architecture: images.X86_64,
-	},
-}
+// var ImagesMap = []images.ImageBuildSpec{
+// 	{
+// 		Name:         "ubuntu",
+// 		Version:      "bionic",
+// 		RootFs:       "ext4",
+// 		SourceURI:    "ubuntu:bionic",
+// 		Type:         images.StandardImage,
+// 		BuildScript:  filepath.Join(SCRIPTS, "build-fc-ubuntu.sh"),
+// 		Size:         1 * 1024 * 1024 * 1024,
+// 		Source:       images.DockerImage,
+// 		Architecture: images.X86_64,
+// 	},
+// 	{
+// 		Name:         "ubuntu",
+// 		Version:      "bionic-cloud",
+// 		RootFs:       "ext4",
+// 		SourceURI:    "ubuntu:bionic",
+// 		Type:         images.StandardImage,
+// 		BuildScript:  filepath.Join(SCRIPTS, "build-fc-ubuntu-cloud.sh"),
+// 		Size:         1 * 1024 * 1024 * 1024,
+// 		Source:       images.DockerImage,
+// 		Architecture: images.X86_64,
+// 	},
+// 	{
+// 		Name:         "alpine",
+// 		Version:      "3.10",
+// 		RootFs:       "ext4",
+// 		SourceURI:    "alpine:3.10",
+// 		Type:         images.StandardImage,
+// 		BuildScript:  filepath.Join(SCRIPTS, "build-fc-alpine.sh"),
+// 		Size:         1 * 1024 * 1024 * 1024,
+// 		Source:       images.DockerImage,
+// 		Architecture: images.X86_64,
+// 	},
+// 	{
+// 		Name:         "alpine",
+// 		Version:      "3.10-cloud",
+// 		RootFs:       "ext4",
+// 		SourceURI:    "alpine:3.10",
+// 		Type:         images.StandardImage,
+// 		BuildScript:  filepath.Join(SCRIPTS, "build-fc-alpine-cloud.sh"),
+// 		Size:         1 * 1024 * 1024 * 1024,
+// 		Source:       images.DockerImage,
+// 		Architecture: images.X86_64,
+// 	},
+// }
 
-func BuildBaseImages() error {
-	//build the base images based on the configuration map
-	for _, imgSpec := range ImagesMap {
-		err := imgSpec.Prepare(WORKSPACE)
-		if err != nil {
-			return err
-		}
-		err = imgSpec.RunBuild()
-		if err != nil {
-			return err
-		}
-		err = imgSpec.Package(ASSET_OUT_DIR)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// func BuildBaseImages() error {
+// 	//build the base images based on the configuration map
+// 	for _, imgSpec := range ImagesMap {
+// 		err := imgSpec.Prepare(WORKSPACE)
+// 		if err != nil {
+// 			return err
+// 		}
+// 		err = imgSpec.RunBuild()
+// 		if err != nil {
+// 			return err
+// 		}
+// 		err = imgSpec.Package(ASSET_OUT_DIR)
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
+// 	return nil
+// }
 
 func BuildImages() error {
 	//build the base images based on the configuration map

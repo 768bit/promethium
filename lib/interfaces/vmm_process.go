@@ -2,13 +2,16 @@ package interfaces
 
 import "time"
 
+import "io"
+
 type VmmProcess interface {
-  GetStatus() string
-  Wait() error
-  Start() error
-  Stop() error
-  Shutdown() error
-  ShutdownTimeout(timeout time.Duration) error
-  Restart() error
-  Reset() error
+	GetStatus() string
+	Wait() error
+	Console() (io.ReadCloser, io.ReadCloser, io.WriteCloser, error)
+	Start() error
+	Stop() error
+	Shutdown() error
+	ShutdownTimeout(timeout time.Duration) error
+	Restart() error
+	Reset() error
 }

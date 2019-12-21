@@ -1,7 +1,7 @@
 ---
 OS: alpine
 Version: 3.10
-Class: standard
+Class: firecracker-standard
 Type: docker
 Size: 1G
 Source: ubuntu:bionic

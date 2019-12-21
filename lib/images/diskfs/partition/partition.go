@@ -17,10 +17,12 @@ func Read(f util.File, logicalBlocksize, physicalBlocksize int) (Table, error) {
 	if err == nil {
 		return gptTable, nil
 	}
+	println(err.Error())
 	mbrTable, err := mbr.Read(f, logicalBlocksize, physicalBlocksize)
 	if err == nil {
 		return mbrTable, nil
 	}
+	println(err.Error())
 	// we are out
 	return nil, fmt.Errorf("Unknown disk partition type")
 }
