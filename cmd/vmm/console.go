@@ -2,9 +2,10 @@ package vmm
 
 import (
 	"bufio"
+	"fmt"
 	"os"
-  "time"
-  "os/exec"
+	"os/exec"
+	"time"
 
 	"github.com/768bit/promethium/cmd/common"
 	"github.com/urfave/cli/v2"
@@ -25,25 +26,24 @@ var (
 )
 
 func setSaneTermMode() {
-  println("Restting sane console settings")
-  raw, err := unix.IoctlGetTermios(STDINFILENO, unix.TCGETS)
-  if err != nil {
-    println(err.Error())
-    return
-  }
-  rawState := *raw
-  rawState.Iflag &^= unix.IGNBRK | unix.INLCR | unix.IGNCR | unix.IUTF8 | unix.IXOFF | unix.IUCLC | unix.IXANY
+	raw, err := unix.IoctlGetTermios(STDINFILENO, unix.TCGETS)
+	if err != nil {
+		println(err.Error())
+		return
+	}
+	rawState := *raw
+	rawState.Iflag &^= unix.IGNBRK | unix.INLCR | unix.IGNCR | unix.IUTF8 | unix.IXOFF | unix.IUCLC | unix.IXANY
 	rawState.Iflag |= unix.BRKINT | unix.ICRNL | unix.IMAXBEL
 	rawState.Oflag |= unix.OPOST | unix.ONLCR
-  rawState.Oflag &^= unix.OLCUC | unix.OCRNL | unix.ONOCR | unix.ONLRET
-  rawState.Cflag |= unix.CREAD
-  err = unix.IoctlSetTermios(STDINFILENO, unix.TCSETS, &rawState)
+	rawState.Oflag &^= unix.OLCUC | unix.OCRNL | unix.ONOCR | unix.ONLRET
+	rawState.Cflag |= unix.CREAD
+	err = unix.IoctlSetTermios(STDINFILENO, unix.TCSETS, &rawState)
 
-  if err != nil {
-    println(err.Error())
-  }
+	if err != nil {
+		println(err.Error())
+	}
 
-  exec.Command("stty", "-F", "/dev/tty", "sane").Run()
+	exec.Command("stty", "-F", "/dev/tty", "sane").Run()
 
 }
 
@@ -59,6 +59,10 @@ var InstanceConsoleCommand = cli.Command{
 		if err != nil {
 			return err
 		}
+		ws.SetCloseHandler(func(code int, text string) error {
+			fmt.Printf("WebSocket Closed: %d : %s\n", code, text)
+			return nil
+		})
 		defer ws.Close()
 		err = ws.WriteJSON(common.OutboundJsonMessage{
 			ID:        "",
@@ -77,28 +81,28 @@ var InstanceConsoleCommand = cli.Command{
 		}
 		rawState := *raw
 
-    rawState.Iflag &^= unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON
-    // t.Iflag &^= BRKINT | ISTRIP | ICRNL | IXON // Stevens RAW
-    rawState.Oflag &^= unix.OPOST
-    rawState.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
-    rawState.Cflag &^= unix.CSIZE | unix.PARENB
-    rawState.Cflag |= unix.CS8
-    rawState.Cc[unix.VMIN] = 1
-    rawState.Cc[unix.VTIME] = 0
+		rawState.Iflag &^= unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON
+		// t.Iflag &^= BRKINT | ISTRIP | ICRNL | IXON // Stevens RAW
+		rawState.Oflag &^= unix.OPOST
+		rawState.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
+		rawState.Cflag &^= unix.CSIZE | unix.PARENB
+		rawState.Cflag |= unix.CS8
+		rawState.Cc[unix.VMIN] = 1
+		rawState.Cc[unix.VTIME] = 0
 
 		err = unix.IoctlSetTermios(STDINFILENO, unix.TCSETS, &rawState)
 
 		if err != nil {
 			return err
-    }
-    
-    defer setSaneTermMode()
+		}
+
+		defer setSaneTermMode()
 
 		// disable input buffering
 		//exec.Command("stty", "-F", "/dev/tty", "cbreak", "isig", "min", "1").Run()
 		// do not display entered characters on the screen
 		//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
-    doExit := false
+		doExit := false
 		go func() {
 
 			inScanner := bufio.NewReaderSize(STDINFILE, 1)
@@ -116,15 +120,16 @@ var InstanceConsoleCommand = cli.Command{
 				if err != nil {
 					println("stdin_read:", err.Error())
 					return
-        } else if n > 1 {
-          println("Larger")
-        }
-        
-        //check if the value is ^D
+				} else if n > 1 {
+					println("Larger")
+				}
 
-        if ibuff[0] == EOF_CHAR {
-          doExit = true
-        }
+				//check if the value is ^D
+
+				if ibuff[0] == EOF_CHAR {
+					print("\r\nExiting...\r\n")
+					doExit = true
+				}
 
 				_, err = wo.Write(ibuff[:n])
 				//wo.Write()
@@ -143,11 +148,11 @@ var InstanceConsoleCommand = cli.Command{
 					println("stdin_write:", err.Error())
 					return
 				}
-        wo.Close()
-        if doExit {
-          ws.Close()
-          return
-        }
+				wo.Close()
+				if doExit {
+					ws.Close()
+					return
+				}
 			}
 		}()
 		buff := make([]byte, 1024)
@@ -157,10 +162,19 @@ var InstanceConsoleCommand = cli.Command{
 
 			//mt, msg, err := ws.ReadMessage()
 			if err != nil {
+				if doExit {
+					return nil
+				}
 				return err
 			}
 			if mt == 2 {
 				n, err := rd.Read(buff)
+				if err != nil {
+					if doExit {
+						return nil
+					}
+					return err
+				}
 				// if err != nil {
 				// 	println("read:", err.Error())
 				// 	break
@@ -168,8 +182,11 @@ var InstanceConsoleCommand = cli.Command{
 				// 	os.Stdout.Write(buff[:n])
 				// }
 				//_, err = io.Copy(os.Stdout, rd)
-				os.Stdout.Write(buff[:n])
+				_, err = os.Stdout.Write(buff[:n])
 				if err != nil {
+					if doExit {
+						return nil
+					}
 					return err
 				}
 			} else {

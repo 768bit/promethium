@@ -1823,6 +1823,21 @@
 
     Network:
       type: object
+      properties:
+        enabled:
+          type: boolean
+
+        type:
+          type: string
+          enum:
+          - linux
+          - ovs
+        masterInterface:
+          $ref: "#/definitions/NetworkMasterInterface"
+        id:
+          type: string
+          format: uuid4
+
 
     NetworkMasterInterface:
       type: object

@@ -5,6 +5,7 @@ package restapi
 import (
 	"bufio"
 	"crypto/tls"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -324,7 +325,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		println("upgrade:", err)
 		return
 	}
-
+	ws.SetCloseHandler(func(code int, text string) error {
+		fmt.Printf("WebSocket Closed: %d : %s\n", code, text)
+		return nil
+	})
 	for {
 		inboundMsg := &InboundJsonMessage{}
 		err := ws.ReadJSON(inboundMsg)
