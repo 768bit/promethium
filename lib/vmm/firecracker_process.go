@@ -142,7 +142,7 @@ func (fcp *FireCrackerProcess) startFirecrackerProcess() error {
 		"--exec-file", fcp.firecrackerBinaryPath,
 		"--uid", strconv.Itoa(os.Getuid()),
 		"--gid", strconv.Itoa(os.Getgid()),
-		"--chroot-base-dir", ROOT_PATH).Sudo() //.CaptureStdoutAndStdErr(false, false)
+		"--chroot-base-dir", ROOT_PATH).Sudo() //.BindToStdoutAndStdErr() //.CaptureStdoutAndStdErr(false, false)
 	e := fcp.jailerProc.Start()
 	go func() {
 		fcp.procExitWaitChan <- fcp.jailerProc.Wait()

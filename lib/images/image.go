@@ -71,12 +71,12 @@ func (icf *ImageConfFile) runDockerBuild(workDir string, mountPoint string) erro
 	//based ont he root path we need to do a build using a workspace that we cleanup
 	//first we need to build the container...
 	imagename := "prm-bootstrap-build-" + icf.OS + "-" + icf.Version
-	cmd := vutils.Exec.CreateAsyncCommand("docker", false, "build", "-t", imagename, ".").BindToStdoutAndStdErr().SetWorkingDir(icf.rootPath)
+	cmd := vutils.Exec.CreateAsyncCommand("docker", false, "build", "--network", "host", "-t", imagename, ".").BindToStdoutAndStdErr().SetWorkingDir(icf.rootPath)
 	if err := cmd.StartAndWait(); err != nil {
 		return err
 	} else {
 		//we successfully built the image.. now execute the container...
-		dockerCmd := vutils.Exec.CreateAsyncCommand("docker", false, "run", "--privileged", "--rm", "-v", workDir+":/output", "-v", mountPoint+":/rootfs", imagename)
+		dockerCmd := vutils.Exec.CreateAsyncCommand("docker", false, "run", "--privileged", "--network", "host", "--rm", "-v", workDir+":/output", "-v", mountPoint+":/rootfs", imagename)
 		return dockerCmd.BindToStdoutAndStdErr().SetWorkingDir(workDir).StartAndWait()
 	}
 }
@@ -718,6 +718,9 @@ func doImageResize(path string, size uint64) error {
 		part, err := qcimg.GetPartition(1)
 		if err != nil {
 			println(err.Error())
+			if err := vutils.Exec.CreateAsyncCommand("e2fsck", false, "-f", "-p", qcimg.connectedDevice).Sudo().BindToStdoutAndStdErr().StartAndWait(); err != nil {
+				return err
+			}
 			return qcimg.GrowFullPart()
 		} else {
 			err = part.GrowPart()

@@ -34,9 +34,9 @@ var ListImagesCommand = cli.Command{
 			} else {
 				println(err.Error())
 			}
-			rows[i] = []string{item.Name, item.Version, odstr}
+			rows[i] = []string{item.ID, item.Name, item.Version, item.Architecture, odstr}
 		}
-		printer.Render([]string{"OS", "Version", "Created"}, rows, nil, false)
+		printer.Render([]string{"ID", "OS", "Version", "Arch", "Created"}, rows, nil, false)
 		return nil
 	},
 }

@@ -3,10 +3,51 @@ package vmm
 import (
 	"bufio"
 	"os"
+  "time"
+  "os/exec"
 
 	"github.com/768bit/promethium/cmd/common"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/sys/unix"
 )
+
+var NullByte byte = 0
+var STDINFILE = os.Stdin
+var STDINFILENO = 0
+
+func makePayload(inArr []byte) []byte {
+	return append(inArr, NullByte)
+}
+
+var (
+	writeWaitDuration time.Duration = time.Duration(400 * time.Millisecond)
+	readWaitDuration  time.Duration = time.Duration(400 * time.Millisecond)
+)
+
+func setSaneTermMode() {
+  println("Restting sane console settings")
+  raw, err := unix.IoctlGetTermios(STDINFILENO, unix.TCGETS)
+  if err != nil {
+    println(err.Error())
+    return
+  }
+  rawState := *raw
+  rawState.Iflag &^= unix.IGNBRK | unix.INLCR | unix.IGNCR | unix.IUTF8 | unix.IXOFF | unix.IUCLC | unix.IXANY
+	rawState.Iflag |= unix.BRKINT | unix.ICRNL | unix.IMAXBEL
+	rawState.Oflag |= unix.OPOST | unix.ONLCR
+  rawState.Oflag &^= unix.OLCUC | unix.OCRNL | unix.ONOCR | unix.ONLRET
+  rawState.Cflag |= unix.CREAD
+  err = unix.IoctlSetTermios(STDINFILENO, unix.TCSETS, &rawState)
+
+  if err != nil {
+    println(err.Error())
+  }
+
+  exec.Command("stty", "-F", "/dev/tty", "sane").Run()
+
+}
+
+var EOF_CHAR = byte(0x4)
 
 var InstanceConsoleCommand = cli.Command{
 	Name:  "console",
@@ -29,43 +70,122 @@ var InstanceConsoleCommand = cli.Command{
 		if err != nil {
 			return err
 		}
+
+		raw, err := unix.IoctlGetTermios(STDINFILENO, unix.TCGETS)
+		if err != nil {
+			return err
+		}
+		rawState := *raw
+
+    rawState.Iflag &^= unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON
+    // t.Iflag &^= BRKINT | ISTRIP | ICRNL | IXON // Stevens RAW
+    rawState.Oflag &^= unix.OPOST
+    rawState.Lflag &^= unix.ECHO | unix.ECHONL | unix.ICANON | unix.ISIG | unix.IEXTEN
+    rawState.Cflag &^= unix.CSIZE | unix.PARENB
+    rawState.Cflag |= unix.CS8
+    rawState.Cc[unix.VMIN] = 1
+    rawState.Cc[unix.VTIME] = 0
+
+		err = unix.IoctlSetTermios(STDINFILENO, unix.TCSETS, &rawState)
+
+		if err != nil {
+			return err
+    }
+    
+    defer setSaneTermMode()
+
+		// disable input buffering
+		//exec.Command("stty", "-F", "/dev/tty", "cbreak", "isig", "min", "1").Run()
+		// do not display entered characters on the screen
+		//exec.Command("stty", "-F", "/dev/tty", "-echo").Run()
+    doExit := false
 		go func() {
-			inScanner := bufio.NewReader(os.Stdin)
-			obuff := make([]byte, 1024)
+
+			inScanner := bufio.NewReaderSize(STDINFILE, 1)
+			ibuff := make([]byte, 1)
 			for {
 
-				n, err := inScanner.Read(obuff)
+				//ws.SetReadDeadline(time.Now().Add(writeWaitDuration))
+				wo, err := ws.NextWriter(2)
 				if err != nil {
-					println("read:", err.Error())
+					println("next_write:", err.Error())
 					return
-				} else if n == 0 {
-					continue
 				}
 
-				err = ws.WriteJSON(&common.OutboundJsonMessage{
-					ID:        "",
-					Operation: "console-input",
-					Payload: map[string]interface{}{
-						"input": string(obuff[:n]),
-					},
-				})
+				n, err := inScanner.Read(ibuff)
 				if err != nil {
-					println("write:", err.Error())
+					println("stdin_read:", err.Error())
+					return
+        } else if n > 1 {
+          println("Larger")
+        }
+        
+        //check if the value is ^D
+
+        if ibuff[0] == EOF_CHAR {
+          doExit = true
+        }
+
+				_, err = wo.Write(ibuff[:n])
+				//wo.Write()
+
+				//	_, err = io.Copy(wo, STDINFILE)
+
+				// err = ws.WriteJSON(&common.OutboundJsonMessage{
+				// 	ID:        "",
+				// 	Operation: "console-input",
+				// 	Payload: map[string]interface{}{
+				// 		"input": string(b),
+				// 	},
+				// })
+				if err != nil {
+					wo.Close()
+					println("stdin_write:", err.Error())
 					return
 				}
+        wo.Close()
+        if doExit {
+          ws.Close()
+          return
+        }
 			}
 		}()
+		buff := make([]byte, 1024)
 		for {
-			inboundMsg := &common.InboundJsonMessage{}
-			err = ws.ReadJSON(inboundMsg)
+			//ws.SetReadDeadline(time.Now().Add(readWaitDuration))
+			mt, rd, err := ws.NextReader()
+
+			//mt, msg, err := ws.ReadMessage()
 			if err != nil {
 				return err
 			}
-			switch inboundMsg.Operation {
-			case "console-output":
-				content := inboundMsg.Payload["output"].(string)
-				os.Stdout.WriteString(content)
+			if mt == 2 {
+				n, err := rd.Read(buff)
+				// if err != nil {
+				// 	println("read:", err.Error())
+				// 	break
+				// } else if n > 0 {
+				// 	os.Stdout.Write(buff[:n])
+				// }
+				//_, err = io.Copy(os.Stdout, rd)
+				os.Stdout.Write(buff[:n])
+				if err != nil {
+					return err
+				}
+			} else {
+				println("differ mt")
 			}
+
+			// inboundMsg := &common.InboundJsonMessage{}
+			// err = ws.ReadJSON(inboundMsg)
+			// if err != nil {
+			// 	return err
+			// }
+			// switch inboundMsg.Operation {
+			// case "console-output":
+			// 	content := inboundMsg.Payload["output"].(string)
+			// 	os.Stdout.WriteString(content)
+			// }
 			//fmt.Println(resp)
 		}
 		return nil

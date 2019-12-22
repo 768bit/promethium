@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"net/http"
+	"time"
 
 	errors "github.com/go-openapi/errors"
 	runtime "github.com/go-openapi/runtime"
@@ -299,7 +300,10 @@ func wsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-var upgrader = websocket.Upgrader{}
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
 
 type InboundJsonMessage struct {
 	ID        string                 `json:"id"`
@@ -335,6 +339,7 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				println(err.Error())
 			}
+			println("Respooling")
 		}
 	}
 
@@ -342,85 +347,107 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 
 }
 
+var NullByte byte = 0
+
+func makePayload(inArr []byte) []byte {
+	return append(inArr, NullByte)
+}
+
+var (
+	writeWaitDuration time.Duration = time.Duration(400 * time.Millisecond)
+	readWaitDuration  time.Duration = time.Duration(400 * time.Millisecond)
+)
+
 func handleConsoleConnect(ws *websocket.Conn, id string) error {
 	vmm, err := vmmManager.Get(id)
 	if err != nil {
 		return err
 	} else {
-		outP, errP, inP, err := vmm.Console()
+		outP, _, inP, err := vmm.Console()
 		if err != nil {
 			return err
 		}
 		go func() {
 			//use the pipes..
-			outScanner := bufio.NewReader(outP)
+			outScanner := bufio.NewReaderSize(outP, 1024)
 			obuff := make([]byte, 1024)
 			for {
+
+				//ws.SetWriteDeadline(time.Now().Add(writeWaitDuration))
+
+				//println("new writer")
+
+				wo, err := ws.NextWriter(2)
+				if err != nil {
+					println("next_write:", err.Error())
+					return
+				}
 
 				n, err := outScanner.Read(obuff)
 				if err != nil {
 					println("read:", err.Error())
 					return
 				} else if n == 0 {
-					continue
+					return
 				}
+				//println("Sending: [" + string(obuff[:n]) + "]")
 
-				err = ws.WriteJSON(&OutboundJsonMessage{
-					ID:        "",
-					Operation: "console-output",
-					Code:      0,
-					Payload: map[string]interface{}{
-						"output": string(obuff[:n]),
-					},
-				})
+				//_, err = io.Copy(wo, outP)
+
+				_, err = wo.Write(obuff[:n])
+
+				// err = ws.WriteJSON(&OutboundJsonMessage{
+				// 	ID:        "",
+				// 	Operation: "console-output",
+				// 	Code:      0,
+				// 	Payload: map[string]interface{}{
+				// 		"output": string(b),
+				// 	},
+				// })
 				if err != nil {
+					wo.Close()
 					println("write:", err.Error())
 					return
 				}
+				wo.Close()
 			}
 		}()
-		go func() {
-			//use the pipes..
-			outScanner := bufio.NewReader(errP)
-			obuff := make([]byte, 1024)
-			for {
+		buff := make([]byte, 1024)
 
-				n, err := outScanner.Read(obuff)
-				if err != nil {
-					println("read:", err.Error())
-					return
-				} else if n == 0 {
-					continue
-				}
-
-				err = ws.WriteJSON(&OutboundJsonMessage{
-					ID:        "",
-					Operation: "console-output",
-					Code:      0,
-					Payload: map[string]interface{}{
-						"output": string(obuff[:n]),
-					},
-				})
-				if err != nil {
-					println("write:", err.Error())
-					return
-				}
-			}
-		}()
 		for {
-			inboundMsg := &InboundJsonMessage{}
-			err := ws.ReadJSON(inboundMsg)
+			//ws.SetReadDeadline(time.Now().Add(readWaitDuration))
+			mt, rd, err := ws.NextReader()
+			//mt, msg, err := ws.ReadMessage()
 			if err != nil {
 				println("read:", err.Error())
 				break
 			}
-			switch inboundMsg.Operation {
-			case "console-input":
-				inp := inboundMsg.Payload["input"].(string)
-				inP.Write([]byte(inp))
-			default:
-				break
+			if mt == 2 {
+				n, err := rd.Read(buff)
+				//println("Copying StdIn: " + string(buff[:n]))
+				inP.Write(buff[:n])
+				if err != nil {
+					return err
+				}
+				//io.Copy(inP, rd)
+				//inP.Write(msg)
+			} else {
+				print("differ mt")
 			}
+
+			// inboundMsg := &InboundJsonMessage{}
+			// err := ws.ReadJSON(inboundMsg)
+			// if err != nil {
+			// 	println("read:", err.Error())
+			// 	break
+			// }
+			// switch inboundMsg.Operation {
+			// case "console-input":
+			// 	inp := inboundMsg.Payload["input"].(string)
+			// 	inP.Write([]byte(inp))
+			// default:
+			// 	break
+			// }
 		}
 	}
 	return nil

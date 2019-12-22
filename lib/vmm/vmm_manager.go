@@ -66,6 +66,13 @@ func (vmmMgr *VmmManager) init() error {
 	if err := vmmMgr.setupNetworking(); err != nil {
 		return err
 	}
+	if vmmMgr.config.IsNewConfig() {
+		println("Is new config")
+		err := storage.InitLocalFileStorage(vmmMgr.config.Storage[0].ID, vmmMgr.config.Storage[0].Config)
+		if err != nil {
+			println(err.Error())
+		}
+	}
 	if storageMgr, err := storage.NewStorageManager(vmmMgr.appRootPath, vmmMgr.config.Storage); err != nil {
 		return err
 	} else {
@@ -83,6 +90,7 @@ func (vmmMgr *VmmManager) scanInstanceConfigs() error {
 	for _, instanceConf := range vutils.Files.GetFilesInDirWithExtension(vmmMgr.instanceConfigRootPath, ".json") {
 		log.Printf("Loading Vmm Config: %s", instanceConf)
 		if vmm, err := vmmMgr.LoadVmm(filepath.Join(vmmMgr.instanceConfigRootPath, instanceConf)); err != nil {
+			println("Error loading VMM: " + err.Error())
 			return err
 		} else {
 			configMap[vmm.id] = true

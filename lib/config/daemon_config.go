@@ -8,6 +8,8 @@ import (
 	"github.com/768bit/vutils"
 )
 
+var IS_NEW_CONFIG bool = false
+
 type PromethiumDaemonConfig struct {
 	NodeID    string                      `json:"nodeID"`
 	Clusters  []*ClusterConfig            `json:"clusters"`
@@ -17,6 +19,7 @@ type PromethiumDaemonConfig struct {
 	JailUser  string                      `json:"jailUser"`
 	JailGroup string                      `json:"jailGroup"`
 	API       *APIConfig                  `json:"api"`
+	isNew     bool
 }
 
 type ClusterConfig struct {
@@ -57,7 +60,12 @@ func LoadPromethiumDaemonConfig() (*PromethiumDaemonConfig, error) {
 	return oconfig, nil
 }
 
+func (pdc *PromethiumDaemonConfig) IsNewConfig() bool {
+	return IS_NEW_CONFIG
+}
+
 func generateNewPromethiumDaemonConfig() error {
+	println("Generating new config")
 	defaultPromDir := "/opt/promethium"
 	storageDir := "/opt/promethium/storage/default-local"
 	storageName := "default-local"
@@ -88,6 +96,7 @@ func generateNewPromethiumDaemonConfig() error {
 		//return err
 		return err
 	}
+	IS_NEW_CONFIG = true
 	//now create the default folder structure...
 	vutils.Files.CreateDirIfNotExist(defaultPromDir)
 	//we also need to create others
@@ -98,7 +107,7 @@ func generateNewPromethiumDaemonConfig() error {
 	vutils.Files.CreateDirIfNotExist(storageDirPath)
 	vutils.Files.CreateDirIfNotExist(instancesDir)
 
-	//err = storage.InitLocalFileStorage(storageName, oconfig.Storage[0].Config)
+	//
 
 	return err
 }
