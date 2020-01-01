@@ -46,14 +46,14 @@ func NewGetNetworkListOK() *GetNetworkListOK {
 OK
 */
 type GetNetworkListOK struct {
-	Payload []models.Network
+	Payload []*models.Network
 }
 
 func (o *GetNetworkListOK) Error() string {
 	return fmt.Sprintf("[GET /networking][%d] getNetworkListOK  %+v", 200, o.Payload)
 }
 
-func (o *GetNetworkListOK) GetPayload() []models.Network {
+func (o *GetNetworkListOK) GetPayload() []*models.Network {
 	return o.Payload
 }
 

@@ -24,6 +24,9 @@ type NewVM struct {
 	// from image
 	FromImage string `json:"fromImage,omitempty"`
 
+	// kernel image
+	KernelImage string `json:"kernelImage,omitempty"`
+
 	// memory
 	Memory int64 `json:"memory,omitempty"`
 

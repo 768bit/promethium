@@ -234,7 +234,7 @@ func (vmmMgr *VmmManager) Create(newVmConf *models.NewVM) (*Vmm, error) {
 
 	//get linux bridge
 
-	return vmmMgr.NewVmmFromImage(newVmConf.Name, newVmConf.Cpus, newVmConf.Memory, newVmConf.FromImage, uint64(newVmConf.RootDiskSize), newVmConf.StorageName, newVmConf.PrimaryNetworkID)
+	return vmmMgr.NewVmmFromImage(newVmConf.Name, newVmConf.Cpus, newVmConf.Memory, newVmConf.FromImage, uint64(newVmConf.RootDiskSize), newVmConf.StorageName, newVmConf.PrimaryNetworkID, newVmConf.KernelImage)
 
 }
 

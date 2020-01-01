@@ -18,6 +18,7 @@ var CWD, _ = os.Getwd()
 var WORKSPACE = filepath.Join(CWD, "workspace")
 var SCRIPTS = filepath.Join(CWD, "scripts")
 var BASE_IMAGES = filepath.Join(CWD, "base-images")
+var KERNEL_IMAGES = filepath.Join(CWD, "kernel-images")
 var ASSET_OUT_DIR = filepath.Join(CWD, "assets", "images")
 var VDATA *vpkg.VersionData
 var LD_FLAGS_FMT_STR = "-w -s -X main.Version=%s -X main.Build=%s -X \"main.BuildDate=%s\" -X main.BuildUUID=%s -X main.GitCommit=%s"
@@ -222,4 +223,27 @@ func BuildImages() error {
 		}
 	}
 	return nil
+}
+
+
+func BuildKernels() error {
+
+
+  buildList := []string{
+    "linux-v4.18",
+    "linux-hardened-v4.20.17.a",
+  }
+
+  for _, item := range buildList {
+    kernelBuildPath := filepath.Join(KERNEL_IMAGES, item)
+    println(kernelBuildPath)
+    img, err := images.BuildPackageFrom(kernelBuildPath, ASSET_OUT_DIR)
+    if err != nil {
+      println(err)
+      return err
+    }
+    println(img.ID + " :: " + img.Name + " " + img.Version)
+  }
+
+  return nil
 }

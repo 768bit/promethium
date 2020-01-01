@@ -1,5 +1,5 @@
 ---
-OS: alpine
+Name: alpine
 Version: 3.10
 Class: firecracker-standard
 Type: docker

@@ -2,11 +2,13 @@ package storage
 
 import (
 	"errors"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/images"
 	"github.com/768bit/vutils"
 )
@@ -87,14 +89,14 @@ func InitLocalFileStorage(id string, config map[string]interface{}) error {
 	return nil
 }
 
-func (lfs *LocalFileStorage) GetImages() ([]*images.Image, error) {
+func (lfs *LocalFileStorage) GetImages() ([]common.Image, error) {
 	//get images needs to get a list of files from the directory
 	lfs.imagesCache = map[string]string{}
 	if !lfs.imagesEnabled {
 		return nil, errors.New("Unable to get images from this storage medium as it doesnt support images")
 	}
 	files := vutils.Files.GetFilesInDirWithExtension(lfs.imagesFolder, ".prk")
-	imagesList := []*images.Image{}
+	imagesList := []common.Image{}
 	for _, file := range files {
 		fullPath := filepath.Join(lfs.imagesFolder, file)
 		img, err := images.LoadImageFromPrk(fullPath, lfs.sm.imagesCache)
@@ -111,7 +113,7 @@ func (lfs *LocalFileStorage) GetURI() string {
 	return "local-file://" + lfs.id
 }
 
-func (lfs *LocalFileStorage) GetImage(name string) (*images.Image, error) {
+func (lfs *LocalFileStorage) GetImage(name string) (common.Image, error) {
 	imageFilePath := filepath.Join(lfs.imagesFolder, name+".prk")
 	if !lfs.imagesEnabled {
 		return nil, errors.New("Unable to get images from this storage medium as it doesnt support images")
@@ -126,7 +128,7 @@ func (lfs *LocalFileStorage) GetImage(name string) (*images.Image, error) {
 	}
 }
 
-func (lfs *LocalFileStorage) GetImageById(id string) (*images.Image, error) {
+func (lfs *LocalFileStorage) GetImageById(id string) (common.Image, error) {
 
 	if !lfs.imagesEnabled {
 		return nil, errors.New("Unable to get images from this storage medium as it doesnt support images")
@@ -150,14 +152,14 @@ func (lfs *LocalFileStorage) GetImageById(id string) (*images.Image, error) {
 	}
 }
 
-func (lfs *LocalFileStorage) CreateDiskFromImage(id string, img *images.Image, size uint64) (*VmmStorageDisk, *VmmKernel, error) {
+func (lfs *LocalFileStorage) CreateDiskFromImage(id string, img common.Image, size uint64) (*common.VmmStorageDisk, *common.VmmKernel, error) {
 	//first lets setup the image in a templ location and resize it...
 	tdir, err := ioutil.TempDir("", "prmvm")
 	if err != nil {
 		return nil, nil, err
 	} else {
 		defer os.RemoveAll(tdir)
-		imgPath, kernPath, err := img.CloneRootDiskToPath(id, tdir, size)
+		imgPath, kernPath, err := img.ExtractRootDiskToPath(id, tdir, size)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -173,12 +175,12 @@ func (lfs *LocalFileStorage) CreateDiskFromImage(id string, img *images.Image, s
 
 		//everything copied ok.. lets instantiate the Disk...
 
-		dsk, err := NewStorageDisk(id, "root", newImagePath, lfs)
+		dsk, err := common.NewStorageDisk(id, "root", newImagePath, lfs)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		kern := NewKernel(id, newKernelPath, lfs)
+		kern := common.NewKernel(id, newKernelPath, lfs)
 		return dsk, kern, nil
 	}
 
@@ -210,4 +212,130 @@ func (lfs *LocalFileStorage) LookupPath(path string) (string, bool, error) {
 		return filepath.Join(lfs.disksFolder, splitPath[1], splitPath[2]+".qcow2"), false, nil
 	}
 	return "", false, nil
+}
+
+func (lfs *LocalFileStorage) WriteKernel(id string, source io.Reader) (string, error) {
+	//pump the source to the output file with ID...
+	newKernelPath := filepath.Join(lfs.kernelsFolder, id+".elf")
+	f, err := os.Create(newKernelPath)
+	if err != nil {
+		return newKernelPath, err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, source)
+	return newKernelPath, err
+}
+func (lfs *LocalFileStorage) WriteRootDisk(id string, source io.Reader, newSize int64, sourceIsRaw bool, growPart bool) (string, error) {
+	//output the qcow2 image somewhere (it came from an image), unless its raw, in which case we just pump it to dest...
+	newDiskPath := filepath.Join(lfs.disksFolder, id, "root.img")
+	if sourceIsRaw {
+		//create the dest file by pumping to dest
+
+		f, err := os.Create(newDiskPath)
+		if err != nil {
+			return newDiskPath, err
+		}
+		defer f.Close()
+		_, err = io.Copy(f, source)
+		if err != nil {
+			return newDiskPath, err
+		}
+		//
+		err = resizeRawImage(newDiskPath, newSize, growPart)
+		return newDiskPath, err
+	} else {
+		err := writeAndConvertQcow2(newDiskPath, source, newSize, false, growPart)
+		return newDiskPath, err
+	}
+	return "", nil
+}
+func (lfs *LocalFileStorage) WriteAdditionalDisk(id string, index int, source io.Reader, newSize int64, sourceIsRaw bool, growPart bool) (string, error) {
+	return "", nil
+}
+func (lfs *LocalFileStorage) WriteCloudInit(id string, source io.Reader) (string, error) {
+	return "", nil
+}
+
+func resizeRawImage(path string, newSize int64, growPart bool) error {
+	qcimg, err := images.LoadQemuImage(path)
+	if err != nil {
+		return err
+	}
+	nsu := uint64(newSize)
+	if nsu < qcimg.VirtualSize() {
+		//err
+	} else if nsu > qcimg.VirtualSize() {
+		//resize/expand
+		err := qcimg.Resize(nsu)
+		if err != nil {
+			return err
+		}
+		if growPart {
+			err = qcimg.GrowFullPart()
+			if err != nil {
+				println(err.Error())
+			}
+		}
+	}
+	return nil
+}
+
+func writeAndConvertQcow2(outpath string, source io.Reader, newSize int64, destIsDevice bool, growPart bool) error {
+	//create a temporary file path...
+	tdir, err := ioutil.TempDir("", "prmbuild")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tdir)
+	//lets pup to a temp file..
+	tempDiskPath := filepath.Join(tdir, "disk.qcow2")
+	f, err := os.Create(tempDiskPath)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(f, source)
+	if err != nil {
+		err = f.Close()
+		return err
+	}
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+	//now we have outputted we need to open the qcow image so we can interrogate it and resize if necessary...
+	qcimg, err := images.LoadQemuImage(tempDiskPath)
+	if err != nil {
+		return err
+	}
+	nsu := uint64(newSize)
+	if nsu < qcimg.VirtualSize() {
+		//err
+	} else if nsu > qcimg.VirtualSize() {
+		//resize/expand
+		err := qcimg.Resize(nsu)
+		if err != nil {
+			return err
+		}
+		if growPart {
+			err = qcimg.GrowFullPart()
+			if err != nil {
+				println("Error growing part:" + err.Error())
+			}
+		}
+	}
+
+	//now we can use qemu-convert to target what we need to...
+	if destIsDevice {
+		err := qcimg.ConvertImgRawDevice(outpath)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := qcimg.ConvertImgRaw(outpath)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

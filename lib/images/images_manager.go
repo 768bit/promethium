@@ -3,12 +3,13 @@ package images
 import (
 	"path/filepath"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/vutils"
 )
 
 //management of images for firecracker...
 
-type KernelImageMap map[ImageArchitecture]map[string]*Image
+type KernelImageMap map[common.ImageArchitecture]map[string]*Image
 
 type ImagesManager struct {
 	rootPath    string
@@ -52,7 +53,7 @@ func (im *ImagesManager) scanCapstanImages() {
 
 func (im *ImagesManager) scanKernelImages() {
 	//scan the root dir for all images and make them available...
-	for _, arch := range ImageArchitectures {
+	for _, arch := range common.ImageArchitectures {
 		kernelArchPath := filepath.Join(im.kernelsRoot, string(arch))
 		vutils.Files.CreateDirIfNotExist(kernelArchPath)
 		im.kernels[arch] = map[string]*Image{}
@@ -70,23 +71,23 @@ func (im *ImagesManager) Create() {
 
 }
 
-func (im *ImagesManager) CreateFrom(source ImageSourceType, sourceURI string) {
+func (im *ImagesManager) CreateFrom(source common.ImageSourceType, sourceURI string) {
 	//scan the root dir for all images and make them available...
 	switch source {
-	case PromethiumImage:
+	case common.PromethiumImage:
 		//lookup the current manager - is it available..
-	case DockerImage:
+	case common.DockerImage:
 		//attempt to obtain the image from docker...
 		break
-	case TarImage:
+	case common.TarImage:
 		//get a tar image from somewhere...
 		break
-	case RawImage:
+	case common.RawImage:
 		//use a raw disk image..
 		break
-	case Qcow2Image:
+	case common.Qcow2Image:
 		break
-	case CapstanImage:
+	case common.CapstanImage:
 		break
 
 	}

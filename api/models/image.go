@@ -7,6 +7,7 @@ package models
 
 import (
 	"encoding/json"
+	"strconv"
 
 	strfmt "github.com/go-openapi/strfmt"
 
@@ -26,6 +27,12 @@ type Image struct {
 	// boot params
 	BootParams string `json:"BootParams,omitempty"`
 
+	// cloud init user data
+	CloudInitUserData *CloudInitUserData `json:"CloudInitUserData,omitempty"`
+
+	// contains
+	Contains []ImageContains `json:"Contains"`
+
 	// created at
 	// Format: date-time
 	CreatedAt strfmt.DateTime `json:"CreatedAt,omitempty"`
@@ -33,27 +40,30 @@ type Image struct {
 	// ID
 	ID string `json:"ID,omitempty"`
 
-	// image hash
-	ImageHash string `json:"ImageHash,omitempty"`
-
-	// kernel hash
-	KernelHash string `json:"KernelHash,omitempty"`
+	// kernel
+	Kernel *KernelImage `json:"Kernel,omitempty"`
 
 	// name
 	Name string `json:"Name,omitempty"`
+
+	// other disks
+	OtherDisks []*DiskImage `json:"OtherDisks"`
+
+	// root disk
+	RootDisk *DiskImage `json:"RootDisk,omitempty"`
 
 	// size
 	Size int64 `json:"Size,omitempty"`
 
 	// source
-	// Enum: [promethium docker tar raw qcow2 capstan]
+	// Enum: [promethium docker tar raw qcow2 capstan kernel]
 	Source string `json:"Source,omitempty"`
 
 	// source URI
 	SourceURI string `json:"SourceURI,omitempty"`
 
 	// type
-	// Enum: [standard osv qemu]
+	// Enum: [standard osv qemu kernel]
 	Type string `json:"Type,omitempty"`
 
 	// version
@@ -68,7 +78,27 @@ func (m *Image) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
+	if err := m.validateCloudInitUserData(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateContains(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateCreatedAt(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateKernel(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateOtherDisks(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateRootDisk(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -129,6 +159,44 @@ func (m *Image) validateArchitecture(formats strfmt.Registry) error {
 	return nil
 }
 
+func (m *Image) validateCloudInitUserData(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.CloudInitUserData) { // not required
+		return nil
+	}
+
+	if m.CloudInitUserData != nil {
+		if err := m.CloudInitUserData.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("CloudInitUserData")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Image) validateContains(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.Contains) { // not required
+		return nil
+	}
+
+	for i := 0; i < len(m.Contains); i++ {
+
+		if err := m.Contains[i].Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("Contains" + "." + strconv.Itoa(i))
+			}
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func (m *Image) validateCreatedAt(formats strfmt.Registry) error {
 
 	if swag.IsZero(m.CreatedAt) { // not required
@@ -142,11 +210,72 @@ func (m *Image) validateCreatedAt(formats strfmt.Registry) error {
 	return nil
 }
 
+func (m *Image) validateKernel(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.Kernel) { // not required
+		return nil
+	}
+
+	if m.Kernel != nil {
+		if err := m.Kernel.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("Kernel")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Image) validateOtherDisks(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.OtherDisks) { // not required
+		return nil
+	}
+
+	for i := 0; i < len(m.OtherDisks); i++ {
+		if swag.IsZero(m.OtherDisks[i]) { // not required
+			continue
+		}
+
+		if m.OtherDisks[i] != nil {
+			if err := m.OtherDisks[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("OtherDisks" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
+func (m *Image) validateRootDisk(formats strfmt.Registry) error {
+
+	if swag.IsZero(m.RootDisk) { // not required
+		return nil
+	}
+
+	if m.RootDisk != nil {
+		if err := m.RootDisk.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("RootDisk")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
 var imageTypeSourcePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["promethium","docker","tar","raw","qcow2","capstan"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["promethium","docker","tar","raw","qcow2","capstan","kernel"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -173,6 +302,9 @@ const (
 
 	// ImageSourceCapstan captures enum value "capstan"
 	ImageSourceCapstan string = "capstan"
+
+	// ImageSourceKernel captures enum value "kernel"
+	ImageSourceKernel string = "kernel"
 )
 
 // prop value enum
@@ -201,7 +333,7 @@ var imageTypeTypePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["standard","osv","qemu"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["standard","osv","qemu","kernel"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -219,6 +351,9 @@ const (
 
 	// ImageTypeQemu captures enum value "qemu"
 	ImageTypeQemu string = "qemu"
+
+	// ImageTypeKernel captures enum value "kernel"
+	ImageTypeKernel string = "kernel"
 )
 
 // prop value enum

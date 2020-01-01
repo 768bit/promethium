@@ -25,7 +25,7 @@ type CreateNetworkOK struct {
 	/*
 	  In: Body
 	*/
-	Payload models.Network `json:"body,omitempty"`
+	Payload *models.Network `json:"body,omitempty"`
 }
 
 // NewCreateNetworkOK creates CreateNetworkOK with default headers values
@@ -35,13 +35,13 @@ func NewCreateNetworkOK() *CreateNetworkOK {
 }
 
 // WithPayload adds the payload to the create network o k response
-func (o *CreateNetworkOK) WithPayload(payload models.Network) *CreateNetworkOK {
+func (o *CreateNetworkOK) WithPayload(payload *models.Network) *CreateNetworkOK {
 	o.Payload = payload
 	return o
 }
 
 // SetPayload sets the payload to the create network o k response
-func (o *CreateNetworkOK) SetPayload(payload models.Network) {
+func (o *CreateNetworkOK) SetPayload(payload *models.Network) {
 	o.Payload = payload
 }
 
@@ -49,8 +49,10 @@ func (o *CreateNetworkOK) SetPayload(payload models.Network) {
 func (o *CreateNetworkOK) WriteResponse(rw http.ResponseWriter, producer runtime.Producer) {
 
 	rw.WriteHeader(200)
-	payload := o.Payload
-	if err := producer.Produce(rw, payload); err != nil {
-		panic(err) // let the recovery middleware deal with this
+	if o.Payload != nil {
+		payload := o.Payload
+		if err := producer.Produce(rw, payload); err != nil {
+			panic(err) // let the recovery middleware deal with this
+		}
 	}
 }

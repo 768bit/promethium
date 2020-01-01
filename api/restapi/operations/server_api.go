@@ -114,6 +114,9 @@ func NewServerAPI(spec *loads.Document) *ServerAPI {
 		VmsGetVMHandler: vms.GetVMHandlerFunc(func(params vms.GetVMParams) middleware.Responder {
 			return middleware.NotImplemented("operation VmsGetVM has not yet been implemented")
 		}),
+		VmsGetVMConsoleHandler: vms.GetVMConsoleHandlerFunc(func(params vms.GetVMConsoleParams) middleware.Responder {
+			return middleware.NotImplemented("operation VmsGetVMConsole has not yet been implemented")
+		}),
 		VmsGetVMDiskHandler: vms.GetVMDiskHandlerFunc(func(params vms.GetVMDiskParams) middleware.Responder {
 			return middleware.NotImplemented("operation VmsGetVMDisk has not yet been implemented")
 		}),
@@ -238,6 +241,8 @@ type ServerAPI struct {
 	StorageGetStorageListHandler storage.GetStorageListHandler
 	// VmsGetVMHandler sets the operation handler for the get VM operation
 	VmsGetVMHandler vms.GetVMHandler
+	// VmsGetVMConsoleHandler sets the operation handler for the get VM console operation
+	VmsGetVMConsoleHandler vms.GetVMConsoleHandler
 	// VmsGetVMDiskHandler sets the operation handler for the get VM disk operation
 	VmsGetVMDiskHandler vms.GetVMDiskHandler
 	// VmsGetVMDiskListHandler sets the operation handler for the get VM disk list operation
@@ -425,6 +430,10 @@ func (o *ServerAPI) Validate() error {
 
 	if o.VmsGetVMHandler == nil {
 		unregistered = append(unregistered, "vms.GetVMHandler")
+	}
+
+	if o.VmsGetVMConsoleHandler == nil {
+		unregistered = append(unregistered, "vms.GetVMConsoleHandler")
 	}
 
 	if o.VmsGetVMDiskHandler == nil {
@@ -704,6 +713,11 @@ func (o *ServerAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/vms/{vmID}"] = vms.NewGetVM(o.context, o.VmsGetVMHandler)
+
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/vms/{vmID}/console"] = vms.NewGetVMConsole(o.context, o.VmsGetVMConsoleHandler)
 
 	if o.handlers["GET"] == nil {
 		o.handlers["GET"] = make(map[string]http.Handler)

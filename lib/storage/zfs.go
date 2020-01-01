@@ -3,8 +3,10 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/images"
 	"github.com/768bit/vutils"
 	"github.com/gobuffalo/envy"
@@ -85,7 +87,7 @@ func (zfs *ZfsStorage) LookupPath(path string) (string, bool, error) {
 	return "zfs://" + zfs.id, false, nil
 }
 
-func (zfs *ZfsStorage) GetImages() ([]*images.Image, error) {
+func (zfs *ZfsStorage) GetImages() ([]common.Image, error) {
 	//in zfs images are stored under a filesystem path..
 	//vm disks are block devices (volumes)
 	zfs.imagesCache = map[string]string{}
@@ -96,7 +98,7 @@ func (zfs *ZfsStorage) GetImages() ([]*images.Image, error) {
 		return nil, errors.New("Unable to get images from this storage medium as it doesnt support images")
 	} else {
 		files := vutils.Files.GetFilesInDirWithExtension(zfs.imagesFolder, "prk")
-		imagesList := []*images.Image{}
+		imagesList := []common.Image{}
 		for _, file := range files {
 			imageFilePath := filepath.Join(zfs.imagesFolder, file)
 			img, err := images.LoadImageFromPrk(imageFilePath, zfs.sm.imagesCache)
@@ -110,7 +112,7 @@ func (zfs *ZfsStorage) GetImages() ([]*images.Image, error) {
 	}
 }
 
-func (zfs *ZfsStorage) GetImage(name string) (*images.Image, error) {
+func (zfs *ZfsStorage) GetImage(name string) (common.Image, error) {
 	//in zfs images are stored under a filesystem path..
 	//vm disks are block devices (volumes)
 	if !zfs.isMounted() {
@@ -132,7 +134,7 @@ func (zfs *ZfsStorage) GetImage(name string) (*images.Image, error) {
 	}
 }
 
-func (zfs *ZfsStorage) GetImageById(id string) (*images.Image, error) {
+func (zfs *ZfsStorage) GetImageById(id string) (common.Image, error) {
 	//in zfs images are stored under a filesystem path..
 	//vm disks are block devices (volumes)
 	if !zfs.isMounted() {
@@ -165,8 +167,21 @@ func (zfs *ZfsStorage) GetImageById(id string) (*images.Image, error) {
 	}
 }
 
-func (zfs *ZfsStorage) CreateDiskFromImage(id string, img *images.Image, size uint64) (*VmmStorageDisk, *VmmKernel, error) {
+func (zfs *ZfsStorage) CreateDiskFromImage(id string, img common.Image, size uint64) (*common.VmmStorageDisk, *common.VmmKernel, error) {
 	return nil, nil, nil
+}
+
+func (zfs *ZfsStorage) WriteKernel(id string, source io.Reader) (string, error) {
+	return "", nil
+}
+func (zfs *ZfsStorage) WriteRootDisk(id string, source io.Reader, sourceIsRaw bool, growPart bool) (string, error) {
+	return "", nil
+}
+func (zfs *ZfsStorage) WriteAdditionalDisk(id string, index int, source io.Reader, sourceIsRaw bool, growPart bool) (string, error) {
+	return "", nil
+}
+func (zfs *ZfsStorage) WriteCloudInit(id string, source io.Reader) (string, error) {
+	return "", nil
 }
 
 func SetZfsRootPath(newRootPath string) {

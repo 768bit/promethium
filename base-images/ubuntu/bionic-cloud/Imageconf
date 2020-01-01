@@ -1,5 +1,5 @@
 ---
-OS: ubuntu
+Name: ubuntu
 Version: bionic-cloud
 Class: firecracker-standard
 Type: docker

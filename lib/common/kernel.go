@@ -1,4 +1,10 @@
-package storage
+package common
+
+type KernelArchitecture string
+
+const (
+	KernelAmd64 KernelArchitecture = "amd64"
+)
 
 type VmmKernel struct {
 	id            string

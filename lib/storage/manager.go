@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/config"
 	"github.com/768bit/promethium/lib/images"
 	"github.com/768bit/vutils"
+	"github.com/fsnotify/fsnotify"
 )
 
 type StorageManager struct {
-	targets         map[string]StorageDriver
+	targets         map[string]common.StorageDriver
 	imagesCachePath string
 	imagesCache     map[string]*images.ImageCacheFile
 	imagesHashMap   map[string]string
@@ -23,7 +26,7 @@ type StorageManager struct {
 
 func NewStorageManager(promethiumRootPath string, configs []*config.StorageConfig) (*StorageManager, error) {
 	sm := &StorageManager{
-		targets:         map[string]StorageDriver{},
+		targets:         map[string]common.StorageDriver{},
 		imagesCachePath: filepath.Join(promethiumRootPath, "cache", "images"),
 		imagesCache:     nil,
 		imagesHashMap:   map[string]string{},
@@ -146,7 +149,7 @@ func (sm *StorageManager) writeImagesCache() {
 	}
 }
 
-func (sm *StorageManager) GetStorage(name string) (StorageDriver, error) {
+func (sm *StorageManager) GetStorage(name string) (common.StorageDriver, error) {
 	if sm == nil || sm.targets == nil {
 		return nil, errors.New("Target Map is NIL!")
 	}
@@ -157,9 +160,9 @@ func (sm *StorageManager) GetStorage(name string) (StorageDriver, error) {
 	}
 }
 
-func (sm *StorageManager) GetImages() []*images.Image {
+func (sm *StorageManager) GetImages() []common.Image {
 
-	imagesList := []*images.Image{}
+	imagesList := []common.Image{}
 	for _, storageDriver := range sm.targets {
 		imgs, err := storageDriver.GetImages()
 		if err == nil && imgs != nil && len(imgs) > 0 {
@@ -171,7 +174,7 @@ func (sm *StorageManager) GetImages() []*images.Image {
 	return imagesList
 }
 
-func (sm *StorageManager) GetImageByID(id string) (*images.Image, error) {
+func (sm *StorageManager) GetImageByID(id string) (common.Image, error) {
 
 	for _, storageDriver := range sm.targets {
 		img, err := storageDriver.GetImageById(id)
@@ -185,7 +188,7 @@ func (sm *StorageManager) GetImageByID(id string) (*images.Image, error) {
 	return nil, errors.New("Unable to find image with ID " + id)
 }
 
-func (sm *StorageManager) GetImage(name string) (*images.Image, error) {
+func (sm *StorageManager) GetImage(name string) (common.Image, error) {
 
 	for _, storageDriver := range sm.targets {
 		img, err := storageDriver.GetImage(name)
@@ -199,7 +202,7 @@ func (sm *StorageManager) GetImage(name string) (*images.Image, error) {
 	return nil, errors.New("Unable to find image with name " + name)
 }
 
-func (sm *StorageManager) MakeNewVmDiskAndKernelFromImage(id string, targetStorage string, img *images.Image, size uint64) (*VmmStorageDisk, *VmmKernel, error) {
+func (sm *StorageManager) MakeNewVmDiskAndKernelFromImage(id string, targetStorage string, img common.Image, size uint64) (*common.VmmStorageDisk, *common.VmmKernel, error) {
 
 	//get the storage target
 	target, err := sm.GetStorage(targetStorage)
@@ -232,4 +235,39 @@ func (sm *StorageManager) ResolveStorageURI(uri string) (string, bool, error) {
 		}
 	}
 	return "", false, nil
+}
+
+func (sm *StorageManager) runDirectoryWatch() {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("event:", event)
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					log.Println("modified file:", event.Name)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	err = watcher.Add("/tmp/foo")
+	if err != nil {
+		log.Fatal(err)
+	}
+	<-done
 }

@@ -2,13 +2,14 @@ package vmm
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/config"
-	"github.com/768bit/promethium/lib/interfaces"
 	"github.com/768bit/vutils"
 )
 
@@ -26,7 +27,7 @@ They can be plain VMs... or OSv unikernel enabled applications
 //The process is loaded and dependencies are tracked..
 
 //when creating a new vmm we only care about
-func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, image string, size uint64, targetStorage string, primaryNetwork string) (*Vmm, error) {
+func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, image string, size uint64, targetStorage string, primaryNetwork string, kernelImage string) (*Vmm, error) {
 
 	//the primary network selection consists of:
 	// bridge name
@@ -38,6 +39,17 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 	//disk needs to be generated... based on... source image size and what storage back end to use
 
 	//get the image..
+	vmmId, _ := vutils.UUID.MakeUUIDString()
+	vmmConfig := &config.VmmConfig{
+		ID:        vmmId,
+		Name:      name,
+		Clustered: false,
+		Memory:    mem,
+		Cpus:      vcpus,
+		Kernel:    "",
+		Volumes:   []*config.VmmVolumeConfig{},
+		Network:   &config.VmmNetworkConfig{},
+	}
 
 	img, err := mgr.Storage().GetImageByID(image)
 	if err != nil {
@@ -51,33 +63,100 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 		}
 	}
 
-	println("Got image " + img.ID)
+	println("Got image " + img.GetID())
 
-	vmmId, _ := vutils.UUID.MakeUUIDString()
+	tstr, err := mgr.Storage().GetStorage(targetStorage)
+	if err != nil {
 
-	//we have an image now we need to instantiate it in the storage target (and ther kernel)
-	disk, kernel, err := mgr.Storage().MakeNewVmDiskAndKernelFromImage(vmmId, targetStorage, img, size)
+		println(err.Error())
+		return nil, err
+	}
+	pkgFile, ds, err := img.GetRootDiskReader()
+	if err != nil {
+		if pkgFile != nil {
+			pkgFile.Close()
+		}
+		println(err.Error())
+		return nil, err
+	}
+
+	rootDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
 	if err != nil {
 
 		println(err.Error())
 		return nil, err
 	}
 
-	vmmConfig := &config.VmmConfig{
-		ID:        vmmId,
-		Name:      name,
-		Clustered: false,
-		Memory:    mem,
-		Cpus:      vcpus,
-		Kernel:    kernel.GetURI(),
-		Type:      config.VmmType(img.Type),
-		Volumes:   []*config.VmmVolumeConfig{},
-		Network:   &config.VmmNetworkConfig{},
-		Disks: []*config.VmmDiskConfig{
-			disk.ToDiskConfig(),
-		},
-		BootCmd: img.BootParams,
+	rootDisk, err := common.NewStorageDisk(vmmId, name, rootDiskPath, tstr)
+	if err != nil {
+
+		println(err.Error())
+		return nil, err
 	}
+	vmmConfig.Disks = []*config.VmmDiskConfig{
+		rootDisk.ToDiskConfig(),
+	}
+
+	//does the image have a kernel? have we selected a different one?
+
+	if !img.HasKernel() && kernelImage == "" {
+		fmt.Println("Kernel not specified for VM")
+	} else if !img.HasKernel() {
+		//we dont have a kernel but be can seek for one... one was specified...
+		kimg, err := mgr.Storage().GetImageByID(image)
+		if err != nil {
+
+			println(err.Error())
+			kimg, err = mgr.Storage().GetImage(image)
+			if err != nil {
+
+				println(err.Error())
+				return nil, err
+			}
+		}
+		pkgFile, ds, err := kimg.GetKernelReader()
+		if err != nil {
+			if pkgFile != nil {
+				pkgFile.Close()
+			}
+			println(err.Error())
+			return nil, err
+		}
+		kernelDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
+		if err != nil {
+
+			println(err.Error())
+			return nil, err
+		}
+		kernelImg := common.NewKernel(vmmId, kernelDiskPath, tstr)
+		vmmConfig.Kernel = kernelImg.GetURI()
+	} else {
+		//the main image contains a kernel
+		pkgFile, ds, err := img.GetKernelReader()
+		if err != nil {
+			if pkgFile != nil {
+				pkgFile.Close()
+			}
+			println(err.Error())
+			return nil, err
+		}
+		kernelDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
+		if err != nil {
+
+			println(err.Error())
+			return nil, err
+		}
+		kernelImg := common.NewKernel(vmmId, kernelDiskPath, tstr)
+		vmmConfig.Kernel = kernelImg.GetURI()
+	}
+
+	//we have an image now we need to instantiate it in the storage target (and ther kernel)
+	// disk, kernel, err := mgr.Storage().MakeNewVmDiskAndKernelFromImage(vmmId, targetStorage, img, size)
+	// if err != nil {
+
+	// 	println(err.Error())
+	// 	return nil, err
+	// }
 
 	//save the config...
 
@@ -133,7 +212,7 @@ type Vmm struct {
 	rootDiskPath string
 
 	fcInstancePath string
-	instance       interfaces.VmmProcess
+	instance       common.VmmProcess
 }
 
 func (vmm *Vmm) init(cfg *config.VmmConfig) (*Vmm, error) {
@@ -217,6 +296,7 @@ func (vmm *Vmm) Start() error {
 }
 
 func (vmm *Vmm) Console() (io.ReadCloser, io.ReadCloser, io.WriteCloser, error) {
+
 	return vmm.instance.Console()
 }
 

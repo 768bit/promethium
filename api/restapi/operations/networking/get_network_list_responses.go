@@ -25,7 +25,7 @@ type GetNetworkListOK struct {
 	/*
 	  In: Body
 	*/
-	Payload []models.Network `json:"body,omitempty"`
+	Payload []*models.Network `json:"body,omitempty"`
 }
 
 // NewGetNetworkListOK creates GetNetworkListOK with default headers values
@@ -35,13 +35,13 @@ func NewGetNetworkListOK() *GetNetworkListOK {
 }
 
 // WithPayload adds the payload to the get network list o k response
-func (o *GetNetworkListOK) WithPayload(payload []models.Network) *GetNetworkListOK {
+func (o *GetNetworkListOK) WithPayload(payload []*models.Network) *GetNetworkListOK {
 	o.Payload = payload
 	return o
 }
 
 // SetPayload sets the payload to the get network list o k response
-func (o *GetNetworkListOK) SetPayload(payload []models.Network) {
+func (o *GetNetworkListOK) SetPayload(payload []*models.Network) {
 	o.Payload = payload
 }
 
@@ -52,7 +52,7 @@ func (o *GetNetworkListOK) WriteResponse(rw http.ResponseWriter, producer runtim
 	payload := o.Payload
 	if payload == nil {
 		// return empty array
-		payload = make([]models.Network, 0, 50)
+		payload = make([]*models.Network, 0, 50)
 	}
 
 	if err := producer.Produce(rw, payload); err != nil {

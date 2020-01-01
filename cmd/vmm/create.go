@@ -44,6 +44,10 @@ var CreateInstanceCommand = cli.Command{
 			Required: true,
 		},
 		&cli.StringFlag{
+			Name:    "kernel-image",
+			Aliases: []string{"k"},
+		},
+		&cli.StringFlag{
 			Name:  "storage",
 			Value: "default-local",
 		},
@@ -63,6 +67,7 @@ var CreateInstanceCommand = cli.Command{
 			PrimaryNetworkID: "",
 			RootDiskSize:     ds,
 			FromImage:        c.String("image"),
+			KernelImage:      c.String("kernel-image"),
 			StorageName:      c.String("storage"),
 		})
 		resp, err := ApiCli.Vms.CreateVM(params)

@@ -25,7 +25,7 @@ type UpdateNetworkOK struct {
 	/*
 	  In: Body
 	*/
-	Payload models.Network `json:"body,omitempty"`
+	Payload *models.Network `json:"body,omitempty"`
 }
 
 // NewUpdateNetworkOK creates UpdateNetworkOK with default headers values
@@ -35,13 +35,13 @@ func NewUpdateNetworkOK() *UpdateNetworkOK {
 }
 
 // WithPayload adds the payload to the update network o k response
-func (o *UpdateNetworkOK) WithPayload(payload models.Network) *UpdateNetworkOK {
+func (o *UpdateNetworkOK) WithPayload(payload *models.Network) *UpdateNetworkOK {
 	o.Payload = payload
 	return o
 }
 
 // SetPayload sets the payload to the update network o k response
-func (o *UpdateNetworkOK) SetPayload(payload models.Network) {
+func (o *UpdateNetworkOK) SetPayload(payload *models.Network) {
 	o.Payload = payload
 }
 
@@ -49,9 +49,11 @@ func (o *UpdateNetworkOK) SetPayload(payload models.Network) {
 func (o *UpdateNetworkOK) WriteResponse(rw http.ResponseWriter, producer runtime.Producer) {
 
 	rw.WriteHeader(200)
-	payload := o.Payload
-	if err := producer.Produce(rw, payload); err != nil {
-		panic(err) // let the recovery middleware deal with this
+	if o.Payload != nil {
+		payload := o.Payload
+		if err := producer.Produce(rw, payload); err != nil {
+			panic(err) // let the recovery middleware deal with this
+		}
 	}
 }
 

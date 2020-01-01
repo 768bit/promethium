@@ -25,6 +25,9 @@ umount /rootfs/mnt
 
 echo "init=/bin/systemd noapic reboot=k panic=1 pci=off nomodules console=ttyS0" > /output/boot
 
+echo "{\"machine\": \"$(uname -m)\", \"platform\": \"$(uname -i)\", \"version\": \"${KERNEL_SOURCE_VERSION}\", \"from\": \"ubuntu:bionic\"}" > /output/_kernel_meta.json
+
+echo "{\"machine\": \"$(uname -m)\", \"platform\": \"$(uname -i)\", \"from\": \"ubuntu:bionic\"}" > /output/_root_meta.json
 
 ##cd /output
 ##tar czvf ubuntu-bionic.tar.gz rootfs.ext4 kernel.elf config boot

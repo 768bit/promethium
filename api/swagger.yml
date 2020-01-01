@@ -1141,6 +1141,7 @@
           - standard
           - osv
           - qemu
+          - kernel
         Size:
           type: integer
           format: int64
@@ -1153,13 +1154,10 @@
           - raw
           - qcow2
           - capstan
+          - kernel
         SourceURI:
           type: string
-        ImageHash:
-          type: string
         BootParams:
-          type: string
-        KernelHash:
           type: string
         Architecture:
           type: string
@@ -1169,8 +1167,123 @@
         CreatedAt:
           type: string
           format: date-time
+        Kernel:
+          $ref: '#/definitions/KernelImage'
+        RootDisk:
+          $ref: '#/definitions/DiskImage'
+        OtherDisks:
+          type: array
+          items:
+            $ref: '#/definitions/DiskImage'
+          default: []
+        CloudInitUserData:
+          $ref: '#/definitions/CloudInitUserData'
+        Contains:
+          type: array
+          items:
+            $ref: '#/definitions/ImageContains'
+
       xml:
         name: "Image"
+
+    ImageContains:
+      type: string
+      enum:
+      - Kernel
+      - RootDisk
+      - AdditionalDisks
+      - CloudInitUserData
+
+
+    KernelImage:
+      type: object
+      properties:
+        Hash:
+          type: string
+        Size:
+          type: integer
+          format: int64
+
+    DiskImage:
+      type: object
+      properties:
+        IsRoot:
+          type: boolean
+        Hash:
+          type: string
+        Size:
+          type: integer
+          format: int64
+
+    CloudInitUserData:
+      type: object
+      properties:
+        Groups:
+          type: array
+          items:
+            type: string
+        Users:
+          type: array
+          items:
+            $ref: '#/definitions/CloudInitUserDataUser'
+        PackageUpdate:
+          type: boolean
+        PackageUpgrade:
+          type: boolean
+        Packages:
+          type: array
+          items:
+            type: string
+        RunCmd:
+          type: array
+          items:
+            type: string
+        BootCmd:
+          type: array
+          items:
+            type: string
+        SshAuthorisedKeys:
+          type: array
+          items:
+            type: string
+        Locale:
+          type: string
+        DisableRoot:
+          type: boolean
+
+    CloudInitUserDataUser:
+      type: object
+      properties:
+        Name:
+          type: string
+        Gecos:
+          type: string
+        PrimaryGroup:
+          type: string
+        Groups:
+          type: array
+          items:
+            type: string
+        Sudo:
+          type: string
+        ExpireDate:
+          type: string
+        SshAuthorisedKeys:
+          type: array
+          items:
+            type: string
+        Inactive:
+          type: boolean
+        System:
+          type: boolean
+        LockPassword:
+          type: boolean
+        Password:
+          type: string
+        Shell:
+          type: string
+
+
     NewImage:
       type: object
       properties:
@@ -1267,6 +1380,8 @@
           type: integer
           format: int64
         fromImage:
+          type: string
+        kernelImage:
           type: string
         rootDiskSize:
           type: integer

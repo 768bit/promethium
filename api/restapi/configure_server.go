@@ -19,6 +19,7 @@ import (
 	"github.com/768bit/promethium/api/restapi/operations/networking"
 	"github.com/768bit/promethium/api/restapi/operations/storage"
 	"github.com/768bit/promethium/api/restapi/operations/vms"
+	img "github.com/768bit/promethium/lib/images"
 	"github.com/768bit/promethium/lib/vmm"
 
 	"github.com/gorilla/websocket"
@@ -140,8 +141,8 @@ func configureAPI(api *operations.ServerAPI) http.Handler {
 		resp := &images.GetImagesListOK{
 			Payload: make([]*models.Image, len(ls)),
 		}
-		for i, img := range ls {
-			resp.Payload[i] = &img.Image
+		for i, im := range ls {
+			resp.Payload[i] = &im.(*img.Image).Image
 		}
 		return resp
 	})

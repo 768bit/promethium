@@ -58,21 +58,23 @@ func NewUpdateNetworkOK() *UpdateNetworkOK {
 successful operation
 */
 type UpdateNetworkOK struct {
-	Payload models.Network
+	Payload *models.Network
 }
 
 func (o *UpdateNetworkOK) Error() string {
 	return fmt.Sprintf("[PUT /networking/{networkID}][%d] updateNetworkOK  %+v", 200, o.Payload)
 }
 
-func (o *UpdateNetworkOK) GetPayload() models.Network {
+func (o *UpdateNetworkOK) GetPayload() *models.Network {
 	return o.Payload
 }
 
 func (o *UpdateNetworkOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
+	o.Payload = new(models.Network)
+
 	// response payload
-	if err := consumer.Consume(response.Body(), &o.Payload); err != nil && err != io.EOF {
+	if err := consumer.Consume(response.Body(), o.Payload); err != nil && err != io.EOF {
 		return err
 	}
 

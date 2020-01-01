@@ -2,7 +2,9 @@ package img
 
 import (
 	"os"
+	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/docker/go-units"
 	"github.com/landoop/tableprinter"
@@ -34,9 +36,11 @@ var ListImagesCommand = cli.Command{
 			} else {
 				println(err.Error())
 			}
-			rows[i] = []string{item.ID, item.Name, item.Version, item.Architecture, odstr}
+			var stringTypes []string
+			stringTypes = *(*[]string)(unsafe.Pointer(&item.Contains))
+			rows[i] = []string{item.ID, item.Name, item.Version, item.Architecture, strings.Join(stringTypes, ","), odstr}
 		}
-		printer.Render([]string{"ID", "OS", "Version", "Arch", "Created"}, rows, nil, false)
+		printer.Render([]string{"ID", "OS", "Version", "Arch", "Contains", "Created"}, rows, nil, false)
 		return nil
 	},
 }

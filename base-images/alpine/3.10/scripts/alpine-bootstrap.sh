@@ -17,6 +17,8 @@ rc-update add sysfs boot
 
 # Then, copy the newly configured system to the rootfs image:
 rsync -ahPHAXx --delete --exclude=/dev/* --exclude=/proc/* --exclude=/sys/* --exclude=/tmp/* --exclude=/run/* --exclude=/mnt/* --exclude=/media/* --exclude=/lost+found --exclude=/rootfs --exclude=/output / /rootfs
-cp /boot/vmlinuz-virt /output/kernel.elf
-cp /boot/config-virt /output/config
+#cp /boot/vmlinuz-virt /output/kernel.elf
+#cp /boot/config-virt /output/config
 echo "noapic reboot=k panic=1 pci=off nomodules console=ttyS0" > /output/boot
+
+echo "{\"machine\": \"$(uname -m)\", \"platform\": \"$(uname -i)\", \"from\": \"ubuntu:bionic\"}" > /output/_root_meta.json

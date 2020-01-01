@@ -22,3 +22,5 @@ rsync -ahPHAXx --delete --exclude=/dev/* --exclude=/proc/* --exclude=/sys/* --ex
 cp /boot/vmlinuz-virt /output/kernel.elf
 cp /boot/config-virt /output/config
 echo "noapic reboot=k panic=1 pci=off nomodules console=ttyS0" > /output/boot
+
+echo "{\"machine\": \"$(uname -m)\", \"platform\": \"$(uname -i)\", \"from\": \"ubuntu:bionic\"}" > /output/_root_meta.json

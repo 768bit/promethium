@@ -1,7 +1,9 @@
-package storage
+package common
 
 import (
+	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"os"
 
 	"github.com/768bit/promethium/lib/config"
@@ -13,6 +15,25 @@ const (
 	QCow2VmmDiskFileFormat   DiskFileFormat = "qcow2"
 	UnknownVmmDiskFileFormat DiskFileFormat = "unknown"
 )
+
+type DiskMeta struct {
+	Machine  string `json:"machine" yaml:"machine"`
+	Platform string `json:"platform" yaml:"platform"`
+	From     string `json:"from" yaml:"from"`
+}
+
+func LoadDiskMeta(path string) (*DiskMeta, error) {
+	var dm DiskMeta
+	ba, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(ba, &dm)
+	if err != nil {
+		return nil, err
+	}
+	return &dm, nil
+}
 
 type VmmStorageDisk struct {
 	id                    string

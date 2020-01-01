@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/config"
 	"github.com/768bit/vutils"
 )
@@ -18,16 +19,16 @@ type ImageBuildSpec struct {
 	BuildScript  string
 	SourceURI    string
 	Type         config.VmmType
-	Architecture ImageArchitecture
-	Source       ImageSourceType
+	Architecture common.ImageArchitecture
+	Source       common.ImageSourceType
 	Args         []string
-	RootFs       ImageFsType
+	RootFs       common.ImageFsType
 	Size         uint64
 	workspace    string
 	imgPath      string
 	mountPoint   string
-	img          *QcowImage
-	part         *QcowImagePartition
+	img          *QemuImage
+	part         *QemuImagePartition
 }
 
 func (ib *ImageBuildSpec) Prepare(workspace string) error {
@@ -42,7 +43,7 @@ func (ib *ImageBuildSpec) Prepare(workspace string) error {
 			return err
 		}
 		ib.imgPath = filepath.Join(ib.workspace, "root.qcow2")
-		img, err := CreateNewQcowImage(ib.imgPath, ib.Size)
+		img, err := CreateNewQemuImage(ib.imgPath, ib.Size)
 		if err != nil {
 			return err
 		}
@@ -83,10 +84,10 @@ func (ib *ImageBuildSpec) cleanup() error {
 }
 
 func (ib *ImageBuildSpec) Package(output string) error {
-	kernelPath := filepath.Join(ib.workspace, "kernel.elf")
+	//kernelPath := filepath.Join(ib.workspace, "kernel.elf")
 	imagePath := filepath.Join(ib.workspace, "root.qcow2")
 
-	_, err := NewImageFromQcow(ib.Name, ib.Version, ib.Type, ib.Size, ib.Source, ib.SourceURI, imagePath, kernelPath)
+	_, err := NewImageFromQcow(ib.Name, ib.Version, ib.Type, ib.Size, ib.Source, ib.SourceURI, imagePath)
 	println(err)
 	return ib.cleanup()
 }

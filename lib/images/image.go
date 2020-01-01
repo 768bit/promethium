@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/768bit/promethium/api/models"
+	"github.com/768bit/promethium/lib/common"
 	"github.com/768bit/promethium/lib/config"
 	"github.com/768bit/vutils"
 	gounits "github.com/docker/go-units"
@@ -26,22 +27,39 @@ import (
 )
 
 type ImageConfFile struct {
-	OS        string         `yaml:"OS" json:"OS"`
-	Version   string         `yaml:"Version" json:"Version"`
-	Type      string         `yaml:"Type" json:"Type"`
-	Class     config.VmmType `yaml:"Class" json:"Class"`
-	Size      string         `yaml:"Size" json:"Size"`
-	Source    string         `yaml:"Source" json:"Source"`
-	sizeBytes int64
-	rootPath  string
+	Name       string         `yaml:"Name" json:"Name"`
+	Version    string         `yaml:"Version" json:"Version"`
+	Type       string         `yaml:"Type" json:"Type"`
+	Class      config.VmmType `yaml:"Class" json:"Class"`
+	Size       string         `yaml:"Size" json:"Size"`
+	Source     string         `yaml:"Source" json:"Source"`
+	KernelOnly bool           `yaml:"KernelOnly" json:"KernelOnly"`
+	sizeBytes  int64
+	rootPath   string
+}
+
+func (icf *ImageConfFile) runDockerBuild(workDir string, mountPoint string) error {
+	//docker run --privileged --rm -v $WORK_DIR:/output -v $MOUNT_POINT:/rootfs ubuntu-firecracker
+	//based ont he root path we need to do a build using a workspace that we cleanup
+	//first we need to build the container...
+	imagename := "prm-bootstrap-build-" + icf.Name + "-" + icf.Version
+	cmd := vutils.Exec.CreateAsyncCommand("docker", false, "build", "--network", "host", "-t", imagename, ".").BindToStdoutAndStdErr().SetWorkingDir(icf.rootPath)
+	if err := cmd.StartAndWait(); err != nil {
+		return err
+	} else {
+		//we successfully built the image.. now execute the container...
+		dockerCmd := vutils.Exec.CreateAsyncCommand("docker", false, "run", "--privileged", "--network", "host", "--rm", "-v", workDir+":/output", "-v", mountPoint+":/rootfs", imagename)
+		return dockerCmd.BindToStdoutAndStdErr().SetWorkingDir(workDir).StartAndWait()
+	}
 }
 
 type ImageCacheFile struct {
-	ID         string   `json:"id"`
-	ImageHash  string   `json:"imageHash"`
-	KernelHash string   `json:"kernelHash"`
-	Files      []string `json:"files"`
-	hash       string
+	ID              string   `json:"id"`
+	RootDiskHash    string   `json:"rootDiskHash"`
+	KernelHash      string   `json:"kernelHash"`
+	OtherDiskHashes []string `json:"otherDiskHashes"`
+	Files           []string `json:"files"`
+	hash            string
 }
 
 func (icf *ImageCacheFile) AddFile(path string) {
@@ -52,8 +70,9 @@ func (icf *ImageCacheFile) AddFile(path string) {
 func (icf *ImageCacheFile) calculateHash() {
 	h := sha256.New()
 	h.Write([]byte(icf.ID))
-	h.Write([]byte(icf.ImageHash))
+	h.Write([]byte(icf.RootDiskHash))
 	h.Write([]byte(icf.KernelHash))
+	h.Write([]byte(strings.Join(icf.OtherDiskHashes, ",")))
 	h.Write([]byte(strings.Join(icf.Files, ",")))
 
 	icf.hash = fmt.Sprintf("%x", h.Sum(nil))
@@ -66,100 +85,76 @@ func (icf *ImageCacheFile) GetHash() string {
 	return icf.hash
 }
 
-func (icf *ImageConfFile) runDockerBuild(workDir string, mountPoint string) error {
-	//docker run --privileged --rm -v $WORK_DIR:/output -v $MOUNT_POINT:/rootfs ubuntu-firecracker
-	//based ont he root path we need to do a build using a workspace that we cleanup
-	//first we need to build the container...
-	imagename := "prm-bootstrap-build-" + icf.OS + "-" + icf.Version
-	cmd := vutils.Exec.CreateAsyncCommand("docker", false, "build", "--network", "host", "-t", imagename, ".").BindToStdoutAndStdErr().SetWorkingDir(icf.rootPath)
-	if err := cmd.StartAndWait(); err != nil {
-		return err
-	} else {
-		//we successfully built the image.. now execute the container...
-		dockerCmd := vutils.Exec.CreateAsyncCommand("docker", false, "run", "--privileged", "--network", "host", "--rm", "-v", workDir+":/output", "-v", mountPoint+":/rootfs", imagename)
-		return dockerCmd.BindToStdoutAndStdErr().SetWorkingDir(workDir).StartAndWait()
-	}
-}
-
-type ImageArchitecture string
-
-const (
-	X86_64  ImageArchitecture = "x86_64"
-	AARCH64 ImageArchitecture = "aarch64"
-)
-
-var ImageArchitectures = []ImageArchitecture{
-	X86_64,
-	AARCH64,
-}
-
-type ImageFsType string
-
-const (
-	Zfs   ImageFsType = "zfs"
-	Ext4  ImageFsType = "ext4"
-	ExFat ImageFsType = "exfat"
-	Ntfs  ImageFsType = "ntfs"
-	Fat32 ImageFsType = "fat32"
-)
-
-type ImageSourceType string
-
-const (
-	PromethiumImage ImageSourceType = "promethium"
-	DockerImage     ImageSourceType = "docker"
-	TarImage        ImageSourceType = "tar"
-	RawImage        ImageSourceType = "raw"
-	Qcow2Image      ImageSourceType = "qcow2"
-	CapstanImage    ImageSourceType = "capstan"
-)
-
-type ImageBackendType uint8
-
-const (
-	QcowImageBackend    ImageBackendType = 0x00
-	BlockImageBackend   ImageBackendType = 0x01
-	UnknownImageBackend ImageBackendType = 0xff
-)
-
-//func NewImage() (*Image, error) {
-////
-////}
-
 type Image struct {
 	models.Image
-	createdAt   time.Time
-	isPrk       bool
-	backendType ImageBackendType
-	imagePath   string
-	kernelPath  string
-	prkPath     string
+	createdAt     time.Time
+	isPrk         bool
+	backendType   common.ImageBackendType
+	diskPath      string
+	kernelPath    string
+	prkPath       string
+	otherDisks    []string
+	contains      common.ImageContainsBits
+	cloudInitPath string
 }
 
-func determineImageBackend(path string) (ImageBackendType, error) {
+func determineImageBackend(path string) (common.ImageBackendType, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return UnknownImageBackend, err
+		return common.UnknownImageBackend, err
 	}
 	if fi.Mode()&os.ModeDevice != 0 {
-		return BlockImageBackend, nil
+		return common.BlockImageBackend, nil
 	} else if fi.IsDir() {
 		//doesnt support directories
-		return UnknownImageBackend, errors.New("Directories are not supported for image backends. Only use block devices or Qcow2 images.")
+		return common.UnknownImageBackend, errors.New("Directories are not supported for image backends. Only use block devices or Qcow2 images.")
 	} else {
 		//is a file... test if its a qcow...
-		_, err := LoadQcowImage(path)
+		_, err := LoadQemuImage(path)
 		if err != nil {
-			return UnknownImageBackend, err
+			return common.UnknownImageBackend, err
 		}
-		return QcowImageBackend, nil
+		return common.QcowImageBackend, nil
 	}
 
 }
 
-func NewImageFromQcow(name string, version string, vmmType config.VmmType, size uint64, source ImageSourceType, sourceURI string, imagePath string, kernelPath string) (*Image, error) {
+func NewKernelOnlyImage(name string, version string, sourceURI string, kernelPath string) (*Image, error) {
 	//lets figure out what backend we are using for the image
-	imgBackend, err := determineImageBackend(imagePath)
+
+	//ok we know what the image backend is, but, we need to load it as required..
+
+	imgId, _ := vutils.UUID.MakeUUIDString()
+	im := &Image{
+		Image: models.Image{
+			ID:                imgId,
+			Name:              name,
+			Version:           version,
+			Type:              "kernel",
+			Source:            "kernel",
+			SourceURI:         sourceURI,
+			Kernel:            &models.KernelImage{},
+			RootDisk:          nil,
+			OtherDisks:        []*models.DiskImage{},
+			CloudInitUserData: nil,
+			Contains:          []models.ImageContains{models.ImageContainsKernel},
+		},
+		backendType: common.UnknownImageBackend,
+		kernelPath:  kernelPath,
+		otherDisks:  []string{},
+	}
+	im.setFlag(common.ImageHasKernel)
+	hash, err := im.calculateKernelHash()
+	if err != nil {
+		return nil, err
+	}
+	im.Kernel.Hash = hash
+	return im, nil
+}
+
+func NewImageFromQcow(name string, version string, vmmType config.VmmType, size uint64, source common.ImageSourceType, sourceURI string, diskPath string) (*Image, error) {
+	//lets figure out what backend we are using for the image
+	imgBackend, err := determineImageBackend(diskPath)
 	if err != nil {
 		return nil, err
 	}
@@ -175,31 +170,35 @@ func NewImageFromQcow(name string, version string, vmmType config.VmmType, size 
 			Type:      string(vmmType),
 			Source:    string(source),
 			SourceURI: sourceURI,
+			Kernel:    nil,
+			RootDisk: &models.DiskImage{
+				IsRoot: true,
+				Size:   int64(size),
+			},
+			OtherDisks:        []*models.DiskImage{},
+			CloudInitUserData: nil,
+			Contains:          []models.ImageContains{models.ImageContainsRootDisk},
 		},
 		backendType: imgBackend,
-		imagePath:   imagePath,
-		kernelPath:  kernelPath,
+		diskPath:    diskPath,
+		otherDisks:  []string{},
 	}
+	im.setFlag(common.ImageHasDisk)
 	hash, err := im.calculateImageHash()
 	if err != nil {
 		return nil, err
 	}
-	im.ImageHash = hash
-	hash, err = im.calculateKernelHash()
-	if err != nil {
-		return nil, err
-	}
-	im.KernelHash = hash
+	im.RootDisk.Hash = hash
 	return im, nil
 }
 
-func prepareQcowImage(workspace string, size uint64) (*QcowImage, string, error) {
+func prepareQcowImage(workspace string, size uint64) (*QemuImage, string, error) {
 	if err := vutils.Files.CreateDirIfNotExist(workspace); err != nil {
 		return nil, "", err
 	} else {
 		//create the meta file with all the details needed...
 		imgPath := filepath.Join(workspace, "root.qcow2")
-		img, err := CreateNewQcowImage(imgPath, size)
+		img, err := CreateNewQemuImage(imgPath, size)
 		if err != nil {
 			return nil, "", err
 		}
@@ -207,7 +206,7 @@ func prepareQcowImage(workspace string, size uint64) (*QcowImage, string, error)
 		if err != nil {
 			return nil, "", err
 		}
-		err = img.MakeFilesystem("root", Ext4)
+		err = img.MakeFilesystem("root", common.Ext4)
 		if err != nil {
 			return nil, "", err
 		}
@@ -224,7 +223,7 @@ func BuildPackageFrom(imageRootPath string, outputPath string) (*Image, error) {
 	imgConf, err := loadImageConfFile(imageRootPath)
 	if err != nil {
 		return nil, err
-	} else if imgConf.Type == "docker" {
+	} else {
 		//this is a docker build..
 		//make workdir
 		tdir, err := ioutil.TempDir("", "prmbuild")
@@ -232,6 +231,44 @@ func BuildPackageFrom(imageRootPath string, outputPath string) (*Image, error) {
 			return nil, err
 		} else {
 			defer os.RemoveAll(tdir)
+			if imgConf.KernelOnly {
+				//we are only doing a kernel build...
+				err = imgConf.runDockerBuild(tdir, "/dev/null")
+				if err != nil {
+					return nil, err
+				}
+				kernelMetaPath := filepath.Join(tdir, "_kernel_meta.json")
+				kernelPath := filepath.Join(tdir, "kernel.elf")
+				if vutils.Files.CheckPathExists(kernelPath) && vutils.Files.CheckPathExists(kernelMetaPath) {
+					//load kernel meta...
+
+					km, err := common.LoadKernelMeta(kernelMetaPath)
+					if err != nil {
+						return nil, err
+					}
+
+					//now load the kernel and ensure it is valid..
+
+					_, err = common.LoadKernelElf(kernelPath)
+					if err != nil {
+						return nil, err
+					}
+
+					img, err := NewKernelOnlyImage(imgConf.Name, km.Version, km.From, kernelPath)
+					if err != nil {
+						return nil, err
+					}
+					img.Image.Architecture = string(km.Machine)
+					println("Building for architecture: " + string(img.Architecture))
+					prkPath, err := img.CreatePackage(tdir, outputPath)
+					if err != nil {
+						return nil, err
+					}
+					return LoadImageFromPrk(prkPath, nil)
+				} else {
+					return nil, errors.New("Unable to load kernel image or kernel meta data")
+				}
+			}
 			qcimg, mp, err := prepareQcowImage(tdir, uint64(imgConf.sizeBytes))
 			if err != nil {
 				return nil, err
@@ -249,14 +286,35 @@ func BuildPackageFrom(imageRootPath string, outputPath string) (*Image, error) {
 			if err != nil {
 				return nil, err
 			}
+			kernelMetaPath := filepath.Join(tdir, "_kernel_meta.json")
 			kernelPath := filepath.Join(tdir, "kernel.elf")
-			imagePath := filepath.Join(tdir, "root.qcow2")
-			img, err := NewImageFromQcow(imgConf.OS, imgConf.Version, config.FirecrackerVmm, uint64(imgConf.sizeBytes), DockerImage, imgConf.Source, imagePath, kernelPath)
+			rootPath := filepath.Join(tdir, "root.qcow2")
+			img, err := NewImageFromQcow(imgConf.Name, imgConf.Version, config.FirecrackerVmm, uint64(imgConf.sizeBytes), common.DockerImage, imgConf.Source, rootPath)
 			if err != nil {
 				return nil, err
 			}
-			img.Image.Architecture = string(getCurrentSysArch())
-			println("Building for architecture: " + string(img.Architecture))
+			///try and load the kernel, does it exist, if not dont include in the package
+			//there are a couple of meta files created so lets read them and they can indicate what needs to be loaded...
+			if vutils.Files.CheckPathExists(kernelPath) && vutils.Files.CheckPathExists(kernelMetaPath) {
+				//load kernel meta...
+				km, err := common.LoadKernelMeta(kernelMetaPath)
+				if err != nil {
+					return nil, err
+				}
+
+				_, err = common.LoadKernelElf(kernelPath)
+				if err != nil {
+					return nil, err
+				}
+
+				img.Image.Architecture = string(km.Machine)
+				println("Building for architecture: " + string(img.Architecture))
+				img.setFlag(common.ImageHasKernel)
+				//now add the kernel - only if it is valid...
+			} else {
+				img.Image.Architecture = string(getCurrentSysArch())
+				println("Building for architecture: " + string(img.Architecture))
+			}
 			prkPath, err := img.CreatePackage(tdir, outputPath)
 			if err != nil {
 				return nil, err
@@ -267,14 +325,23 @@ func BuildPackageFrom(imageRootPath string, outputPath string) (*Image, error) {
 	return nil, nil
 }
 
-func getCurrentSysArch() ImageArchitecture {
+func getCurrentSysArch() common.ImageArchitecture {
 	switch runtime.GOARCH {
 	case "amd64":
-		return X86_64
+		return common.X86_64
 	case "arm64":
-		return AARCH64
+		return common.AARCH64
 	}
-	return X86_64
+	return common.X86_64
+}
+
+func img_contains(s []models.ImageContains, e models.ImageContains) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(s []string, e string) bool {
@@ -284,6 +351,15 @@ func contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+var ADDITIONAL_DISK_NAME_RX = regexp.MustCompile(`^disk-(\d+)\.`)
+
+type ImageHashMap struct {
+	Disk       string
+	Kernel     string
+	CloudInit  string
+	OtherDisks []string
 }
 
 func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Image, error) {
@@ -300,8 +376,6 @@ func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Ima
 	}
 	tr := tar.NewReader(archive)
 	var img Image
-	imageHash := ""
-	kernelHash := ""
 	calcHash := false
 	makeCacheEntry := false
 	addCacheFile := false
@@ -364,6 +438,24 @@ func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Ima
 	//println(pd.String() + " - " + img.createdAt.Format("2006-01-02T15:04:05"))
 	img.Image.CreatedAt = pd
 
+	hm := &ImageHashMap{
+		OtherDisks: []string{},
+	}
+
+	//set image flags based on cotnains field...
+	if img_contains(img.Contains, models.ImageContainsRootDisk) {
+		img.setFlag(common.ImageHasDisk)
+	}
+	if img_contains(img.Contains, models.ImageContainsKernel) {
+		img.setFlag(common.ImageHasKernel)
+	}
+	if img_contains(img.Contains, models.ImageContainsAdditionalDisks) {
+		img.setFlag(common.ImageHasAdditionalDisk)
+	}
+	if img_contains(img.Contains, models.ImageContainsCloudInitUserData) {
+		img.setFlag(common.ImageHasCloudInit)
+	}
+
 	archive.Close()
 	file.Close()
 
@@ -387,20 +479,29 @@ func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Ima
 				break
 			} else if err != nil {
 				return nil, err
-			} else if calcHash && hdr.Name == "root.qcow2" {
+			} else if calcHash && img.HasRootDisk() && hdr.Name == "root.qcow2" {
 				//calculate hash for image...
 				if hash, err := CalculateHashForReader(tr); err != nil {
 					return nil, err
 				} else {
-					imageHash = hash
+					hm.Disk = hash
+					img.diskPath = path + "#root.qcow2"
+					img.RootDisk = &models.DiskImage{
+						IsRoot: true,
+						Hash:   hash,
+					}
 				}
 
-			} else if calcHash && hdr.Name == "kernel.elf" {
+			} else if calcHash && img.HasKernel() && hdr.Name == "kernel.elf" {
 				//calculate hash for image...
 				if hash, err := CalculateHashForReader(tr); err != nil {
 					return nil, err
 				} else {
-					kernelHash = hash
+					hm.Kernel = hash
+					img.kernelPath = path + "#kernel.elf"
+					img.Kernel = &models.KernelImage{
+						Hash: hash,
+					}
 				}
 
 			}
@@ -408,56 +509,74 @@ func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Ima
 		}
 	}
 
+	println("Ready...")
+
 	if currentCacheEntry != nil && !calcHash {
-		if currentCacheEntry.ImageHash != img.ImageHash {
+		if img.RootDisk != nil && currentCacheEntry.RootDiskHash != img.RootDisk.Hash {
 			return nil, errors.New("The cached image hash doesnt match the hash for the embedded image")
-		} else if currentCacheEntry.KernelHash != img.KernelHash {
+		}
+		if img.Kernel != nil && currentCacheEntry.KernelHash != img.Kernel.Hash {
 			return nil, errors.New("The cached kernel hash doesnt match the hash for the embedded kernel")
 		}
 	} else {
 
-		if imageHash == "" {
-			return nil, errors.New("Unable to calculate hash for embedded image file")
-		} else if img.ImageHash == "" {
-			return nil, errors.New("The image metadata information doesnt contain an image hash")
-		} else if img.ImageHash != imageHash {
-			return nil, errors.New("The image metadata image hash doesnt match the calculated hash for the embedded image")
-		} else if kernelHash == "" {
-			return nil, errors.New("Unable to calculate hash for embedded kernel file")
-		} else if img.KernelHash == "" {
-			return nil, errors.New("The image metadata information doesnt contain a kernel hash")
-		} else if img.KernelHash != kernelHash {
-			return nil, errors.New("The image metadata kernel hash doesnt match the calculated hash for the embedded kernel")
+		//only if the image contains a certain target do we verify
+
+		if img.HasRootDisk() {
+			println("Processing Disk...")
+			if hm.Disk == "" {
+				return nil, errors.New("Unable to calculate hash for embedded image file")
+			} else if img.RootDisk.Hash == "" {
+				return nil, errors.New("The image metadata information doesnt contain an image hash")
+			} else if img.RootDisk.Hash != hm.Disk {
+				return nil, errors.New("The image metadata image hash doesnt match the calculated hash for the embedded image")
+			}
+		}
+
+		if img.HasKernel() {
+			println("Processing Kernel...")
+			if hm.Kernel == "" {
+				return nil, errors.New("Unable to calculate hash for embedded kernel file")
+			} else if img.Kernel.Hash == "" {
+				return nil, errors.New("The image metadata information doesnt contain a kernel hash")
+			} else if img.Kernel.Hash != hm.Kernel {
+				return nil, errors.New("The image metadata kernel hash doesnt match the calculated hash for the embedded kernel")
+			}
 		}
 
 		//now check cache entry
 
 		if currentCacheEntry != nil {
-			if currentCacheEntry.ImageHash != imageHash {
+			if currentCacheEntry.RootDiskHash != hm.Disk {
 				return nil, errors.New("The cached image hash doesnt match the calculated hash for the embedded image")
-			} else if currentCacheEntry.KernelHash != kernelHash {
+			} else if currentCacheEntry.KernelHash != hm.Kernel {
 				return nil, errors.New("The cached kernel hash doesnt match the calculated hash for the embedded kernel")
 			}
 		}
 
 	}
 
-	if makeCacheEntry {
-		imagesCache[img.ID] = &ImageCacheFile{
-			ID:         img.ID,
-			ImageHash:  img.ImageHash,
-			KernelHash: img.KernelHash,
-			Files:      []string{path},
+	println("Ready...")
+	if imagesCache != nil {
+		if makeCacheEntry {
+			imagesCache[img.ID] = &ImageCacheFile{
+				ID:    img.ID,
+				Files: []string{},
+			}
+			if img.HasKernel() {
+				imagesCache[img.ID].KernelHash = img.Kernel.Hash
+			}
+			if img.HasRootDisk() {
+				imagesCache[img.ID].RootDiskHash = img.RootDisk.Hash
+			}
+			imagesCache[img.ID].calculateHash()
+		} else if addCacheFile {
+			imagesCache[img.ID].AddFile(path)
 		}
-		imagesCache[img.ID].calculateHash()
-	} else if addCacheFile {
-		imagesCache[img.ID].AddFile(path)
 	}
 
-	img.imagePath = path + "#root.qcow2"
-	img.kernelPath = path + "#kernel.elf"
 	img.isPrk = true
-	img.backendType = QcowImageBackend
+	img.backendType = common.QcowImageBackend
 	img.prkPath = path
 	return &img, nil
 
@@ -479,6 +598,22 @@ func (im *Image) CreatePackage(workspacePath string, outputRoot string) (string,
 
 	//create the image metadata file
 
+	//before we write the meta data we need to poulate the "contains" property
+
+	im.Contains = []models.ImageContains{}
+	if im.HasKernel() {
+		im.Contains = append(im.Contains, models.ImageContainsKernel)
+	}
+	if im.HasRootDisk() {
+		im.Contains = append(im.Contains, models.ImageContainsRootDisk)
+	}
+	if im.HasAdditionalDisks() {
+		im.Contains = append(im.Contains, models.ImageContainsAdditionalDisks)
+	}
+	if im.HasCloudInit() {
+		im.Contains = append(im.Contains, models.ImageContainsCloudInitUserData)
+	}
+
 	if err := im.writeMetadataForWorkspace(workspacePath); err != nil {
 		return opath, err
 	}
@@ -497,6 +632,213 @@ func (im *Image) CreatePackage(workspacePath string, outputRoot string) (string,
 	return opath, err
 }
 
+func (im *Image) HasRootDisk() bool {
+	return im.hasFlag(common.ImageHasDisk)
+}
+
+func (im *Image) HasAdditionalDisks() bool {
+	return im.hasFlag(common.ImageHasAdditionalDisk)
+}
+
+func (im *Image) HasKernel() bool {
+	return im.hasFlag(common.ImageHasKernel)
+}
+
+func (im *Image) HasCloudInit() bool {
+	return im.hasFlag(common.ImageHasCloudInit)
+}
+
+func (im *Image) GetID() string {
+	return im.ID
+}
+
+func (im *Image) GetType() string {
+	return im.Type
+}
+
+func (im *Image) GetBootParams() string {
+	return im.BootParams
+}
+
+func (im *Image) AddCloudInitUserData(cloudInitPath string) error {
+	//add the kernel image into the image and set the flag!
+	if im.hasFlag(common.ImageHasCloudInit) {
+		return errors.New("This image already has a cloud init config, cannot add a new one")
+	}
+	//load the cloud init user data config at path...
+
+	ba, err := ioutil.ReadFile(cloudInitPath)
+	if err != nil {
+		return err
+	}
+
+	var ci *models.CloudInitUserData
+
+	err = yaml.Unmarshal(ba, ci)
+	if err != nil {
+		return err
+	}
+
+	im.cloudInitPath = cloudInitPath
+
+	im.setFlag(common.ImageHasCloudInit)
+	return nil
+}
+
+func (im *Image) AddKernel(kernelPath string) error {
+	//add the kernel image into the image and set the flag!
+	if im.hasFlag(common.ImageHasKernel) {
+		return errors.New("This image already has a kernel, cannot add a new one")
+	}
+	kernStat, err := os.Stat(kernelPath)
+	if err != nil {
+		return err
+	}
+	im.kernelPath = kernelPath
+	hash, err := im.calculateKernelHash()
+	if err != nil {
+		return err
+	}
+	im.Kernel = &models.KernelImage{
+		Hash: hash,
+		Size: kernStat.Size(),
+	}
+	im.setFlag(common.ImageHasKernel)
+	return nil
+}
+
+func (im *Image) AddDisk(diskPath string) error {
+	//add the disk drive into the image and set the flag!
+	//if we already have a root disk we add this disk as an additional item...
+	if im.HasRootDisk() {
+		//add the item to the array if it doesnt exist
+		if !contains(im.otherDisks, diskPath) {
+			//doesnt exist add to the list but only after we have interrogated the image...
+			qcimg, err := LoadQemuImage(diskPath)
+			if err != nil {
+				return err
+			}
+			f, err := os.Open(diskPath)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			//now calculate hash for the assigned path...
+			hash, err := CalculateHashForReader(f)
+			im.OtherDisks = append(im.OtherDisks, &models.DiskImage{
+				Size:   int64(qcimg.VirtualSize()),
+				IsRoot: false,
+				Hash:   hash,
+			})
+			im.otherDisks = append(im.otherDisks, diskPath)
+			im.setFlag(common.ImageHasAdditionalDisk)
+			return nil
+		} else {
+			return errors.New("Disk already added to image")
+		}
+	} else {
+		qcimg, err := LoadQemuImage(diskPath)
+		if err != nil {
+			return err
+		}
+		f, err := os.Open(diskPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		//now calculate hash for the assigned path...
+		hash, err := CalculateHashForReader(f)
+		im.RootDisk = &models.DiskImage{
+			IsRoot: true,
+			Hash:   hash,
+			Size:   int64(qcimg.VirtualSize()),
+		}
+		im.setFlag(common.ImageHasDisk)
+		return nil
+	}
+
+}
+
+func (im *Image) GetRootDiskReader() (*os.File, io.Reader, error) {
+	if im.HasRootDisk() {
+		file, err := os.Open(im.prkPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		//defer file.Close()
+		archive, err := gzip.NewReader(file)
+		if err != nil {
+			return file, nil, err
+		}
+		//defer archive.Close()
+		tr := tar.NewReader(archive)
+
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return file, nil, err
+			} else if hdr.Name == "root.qcow2" {
+				return file, tr, nil
+			}
+
+		}
+	}
+	return nil, nil, errors.New("This image doesnt contain a root disk")
+}
+
+func (im *Image) GetKernelReader() (*os.File, io.Reader, error) {
+	if im.HasKernel() {
+		file, err := os.Open(im.prkPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		//defer file.Close()
+		archive, err := gzip.NewReader(file)
+		if err != nil {
+			return file, nil, err
+		}
+		//defer archive.Close()
+		tr := tar.NewReader(archive)
+
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return file, nil, err
+			} else if hdr.Name == "kernel.elf" {
+				return file, tr, nil
+			}
+
+		}
+	}
+	return nil, nil, errors.New("This image doesnt contain a root disk")
+}
+
+func (im *Image) GetCloudInitReader() (*os.File, io.Reader, error) {
+	return nil, nil, nil
+
+}
+
+func (im *Image) GetAdditionalDiskReader(index int) (*os.File, io.Reader, error) {
+	return nil, nil, nil
+
+}
+
+func (im *Image) setFlag(flag common.ImageContainsBits) {
+	im.contains = flag | im.contains
+}
+
+func (im *Image) clearFlag(flag common.ImageContainsBits) {
+	im.contains = flag &^ im.contains
+}
+
+func (im *Image) hasFlag(flag common.ImageContainsBits) bool {
+	return im.contains&flag != 0
+}
+
 func (im *Image) writeMetadataForWorkspace(workspacePath string) error {
 	metaPath := filepath.Join(workspacePath, "_meta")
 	if encConf, err := json.Marshal(im); err != nil {
@@ -512,7 +854,7 @@ func (im *Image) writeMetadataForWorkspace(workspacePath string) error {
 }
 
 func (im *Image) calculateImageHash() (string, error) {
-	f, err := os.Open(im.imagePath)
+	f, err := os.Open(im.diskPath)
 	if err != nil {
 		return "", err
 	}
@@ -608,6 +950,10 @@ func loadImageConfFile(path string) (*ImageConfFile, error) {
 		return nil, err
 	}
 	t.rootPath = imgRoot
+	//if this is a kernel only image we need to deal with that
+	if t.KernelOnly {
+		return &t, nil
+	}
 	sb, err := gounits.FromHumanSize(t.Size)
 	if err != nil {
 		return nil, err
@@ -616,7 +962,7 @@ func loadImageConfFile(path string) (*ImageConfFile, error) {
 	return &t, nil
 }
 
-func (im *Image) CloneRootDiskToPath(id string, outPath string, size uint64) (string, string, error) {
+func (im *Image) ExtractRootDiskToPath(id string, outPath string, size uint64) (string, string, error) {
 
 	imgOutPath := filepath.Join(outPath, id+".qcow2")
 	kernelOutPath := filepath.Join(outPath, id+".elf")
@@ -658,6 +1004,8 @@ func (im *Image) CloneRootDiskToPath(id string, outPath string, size uint64) (st
 					return "", "", err
 				}
 
+				//now we have the qcow - does it need to be expaned to raw?
+
 			} else if hdr.Name == "kernel.elf" {
 				ofile, err := os.Create(kernelOutPath)
 				if err != nil {
@@ -674,8 +1022,11 @@ func (im *Image) CloneRootDiskToPath(id string, outPath string, size uint64) (st
 
 		}
 	} else {
+
+		//need different strategies for different target environments - qcow2 vs raw image...
+
 		//just copy the images...
-		if err := vutils.Files.Copy(im.imagePath, imgOutPath); err != nil {
+		if err := vutils.Files.Copy(im.diskPath, imgOutPath); err != nil {
 			return "", "", err
 		} else if err := vutils.Files.Copy(im.kernelPath, kernelOutPath); err != nil {
 			return "", "", err
@@ -690,8 +1041,12 @@ func (im *Image) CloneRootDiskToPath(id string, outPath string, size uint64) (st
 
 }
 
+func (im *Image) ExtractKernelToPath(id string, outPath string) (string, string, error) {
+	return "", "", nil
+}
+
 func doImageResize(path string, size uint64) error {
-	qcimg, err := LoadQcowImage(path)
+	qcimg, err := LoadQemuImage(path)
 	if err != nil {
 		return err
 	}

@@ -771,6 +771,42 @@ func init() {
         }
       }
     },
+    "/vms/{vmID}/console": {
+      "get": {
+        "description": "Get a console for a VM instance",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Get a console for a VM instance",
+        "operationId": "getVMConsole",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
     "/vms/{vmID}/disks": {
       "get": {
         "description": "Returns a list of VM Attached Disks",
@@ -1607,6 +1643,121 @@ func init() {
     }
   },
   "definitions": {
+    "CloudInitUserData": {
+      "type": "object",
+      "properties": {
+        "BootCmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DisableRoot": {
+          "type": "boolean"
+        },
+        "Groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Locale": {
+          "type": "string"
+        },
+        "PackageUpdate": {
+          "type": "boolean"
+        },
+        "PackageUpgrade": {
+          "type": "boolean"
+        },
+        "Packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "RunCmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "SshAuthorisedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CloudInitUserDataUser"
+          }
+        }
+      }
+    },
+    "CloudInitUserDataUser": {
+      "type": "object",
+      "properties": {
+        "ExpireDate": {
+          "type": "string"
+        },
+        "Gecos": {
+          "type": "string"
+        },
+        "Groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Inactive": {
+          "type": "boolean"
+        },
+        "LockPassword": {
+          "type": "boolean"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "Password": {
+          "type": "string"
+        },
+        "PrimaryGroup": {
+          "type": "string"
+        },
+        "Shell": {
+          "type": "string"
+        },
+        "SshAuthorisedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Sudo": {
+          "type": "string"
+        },
+        "System": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DiskImage": {
+      "type": "object",
+      "properties": {
+        "Hash": {
+          "type": "string"
+        },
+        "IsRoot": {
+          "type": "boolean"
+        },
+        "Size": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "Image": {
       "type": "object",
       "properties": {
@@ -1620,6 +1771,15 @@ func init() {
         "BootParams": {
           "type": "string"
         },
+        "CloudInitUserData": {
+          "$ref": "#/definitions/CloudInitUserData"
+        },
+        "Contains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ImageContains"
+          }
+        },
         "CreatedAt": {
           "type": "string",
           "format": "date-time"
@@ -1627,14 +1787,21 @@ func init() {
         "ID": {
           "type": "string"
         },
-        "ImageHash": {
-          "type": "string"
-        },
-        "KernelHash": {
-          "type": "string"
+        "Kernel": {
+          "$ref": "#/definitions/KernelImage"
         },
         "Name": {
           "type": "string"
+        },
+        "OtherDisks": {
+          "type": "array",
+          "default": null,
+          "items": {
+            "$ref": "#/definitions/DiskImage"
+          }
+        },
+        "RootDisk": {
+          "$ref": "#/definitions/DiskImage"
         },
         "Size": {
           "type": "integer",
@@ -1648,7 +1815,8 @@ func init() {
             "tar",
             "raw",
             "qcow2",
-            "capstan"
+            "capstan",
+            "kernel"
           ]
         },
         "SourceURI": {
@@ -1659,7 +1827,8 @@ func init() {
           "enum": [
             "standard",
             "osv",
-            "qemu"
+            "qemu",
+            "kernel"
           ]
         },
         "Version": {
@@ -1668,6 +1837,27 @@ func init() {
       },
       "xml": {
         "name": "Image"
+      }
+    },
+    "ImageContains": {
+      "type": "string",
+      "enum": [
+        "Kernel",
+        "RootDisk",
+        "AdditionalDisks",
+        "CloudInitUserData"
+      ]
+    },
+    "KernelImage": {
+      "type": "object",
+      "properties": {
+        "Hash": {
+          "type": "string"
+        },
+        "Size": {
+          "type": "integer",
+          "format": "int64"
+        }
       }
     },
     "MetaDataNetworkBondsConfig": {
@@ -2103,7 +2293,26 @@ func init() {
       }
     },
     "Network": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid4"
+        },
+        "masterInterface": {
+          "$ref": "#/definitions/NetworkMasterInterface"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "linux",
+            "ovs"
+          ]
+        }
+      }
     },
     "NetworkIP4Config": {
       "type": "object",
@@ -2219,6 +2428,9 @@ func init() {
           "format": "int64"
         },
         "fromImage": {
+          "type": "string"
+        },
+        "kernelImage": {
           "type": "string"
         },
         "memory": {
@@ -3386,6 +3598,42 @@ func init() {
         }
       }
     },
+    "/vms/{vmID}/console": {
+      "get": {
+        "description": "Get a console for a VM instance",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Get a console for a VM instance",
+        "operationId": "getVMConsole",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
     "/vms/{vmID}/disks": {
       "get": {
         "description": "Returns a list of VM Attached Disks",
@@ -4222,6 +4470,121 @@ func init() {
     }
   },
   "definitions": {
+    "CloudInitUserData": {
+      "type": "object",
+      "properties": {
+        "BootCmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "DisableRoot": {
+          "type": "boolean"
+        },
+        "Groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Locale": {
+          "type": "string"
+        },
+        "PackageUpdate": {
+          "type": "boolean"
+        },
+        "PackageUpgrade": {
+          "type": "boolean"
+        },
+        "Packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "RunCmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "SshAuthorisedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Users": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CloudInitUserDataUser"
+          }
+        }
+      }
+    },
+    "CloudInitUserDataUser": {
+      "type": "object",
+      "properties": {
+        "ExpireDate": {
+          "type": "string"
+        },
+        "Gecos": {
+          "type": "string"
+        },
+        "Groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Inactive": {
+          "type": "boolean"
+        },
+        "LockPassword": {
+          "type": "boolean"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "Password": {
+          "type": "string"
+        },
+        "PrimaryGroup": {
+          "type": "string"
+        },
+        "Shell": {
+          "type": "string"
+        },
+        "SshAuthorisedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Sudo": {
+          "type": "string"
+        },
+        "System": {
+          "type": "boolean"
+        }
+      }
+    },
+    "DiskImage": {
+      "type": "object",
+      "properties": {
+        "Hash": {
+          "type": "string"
+        },
+        "IsRoot": {
+          "type": "boolean"
+        },
+        "Size": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
     "Image": {
       "type": "object",
       "properties": {
@@ -4235,6 +4598,15 @@ func init() {
         "BootParams": {
           "type": "string"
         },
+        "CloudInitUserData": {
+          "$ref": "#/definitions/CloudInitUserData"
+        },
+        "Contains": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ImageContains"
+          }
+        },
         "CreatedAt": {
           "type": "string",
           "format": "date-time"
@@ -4242,14 +4614,21 @@ func init() {
         "ID": {
           "type": "string"
         },
-        "ImageHash": {
-          "type": "string"
-        },
-        "KernelHash": {
-          "type": "string"
+        "Kernel": {
+          "$ref": "#/definitions/KernelImage"
         },
         "Name": {
           "type": "string"
+        },
+        "OtherDisks": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/definitions/DiskImage"
+          }
+        },
+        "RootDisk": {
+          "$ref": "#/definitions/DiskImage"
         },
         "Size": {
           "type": "integer",
@@ -4263,7 +4642,8 @@ func init() {
             "tar",
             "raw",
             "qcow2",
-            "capstan"
+            "capstan",
+            "kernel"
           ]
         },
         "SourceURI": {
@@ -4274,7 +4654,8 @@ func init() {
           "enum": [
             "standard",
             "osv",
-            "qemu"
+            "qemu",
+            "kernel"
           ]
         },
         "Version": {
@@ -4283,6 +4664,27 @@ func init() {
       },
       "xml": {
         "name": "Image"
+      }
+    },
+    "ImageContains": {
+      "type": "string",
+      "enum": [
+        "Kernel",
+        "RootDisk",
+        "AdditionalDisks",
+        "CloudInitUserData"
+      ]
+    },
+    "KernelImage": {
+      "type": "object",
+      "properties": {
+        "Hash": {
+          "type": "string"
+        },
+        "Size": {
+          "type": "integer",
+          "format": "int64"
+        }
       }
     },
     "MetaDataNetworkBondsConfig": {
@@ -4718,7 +5120,26 @@ func init() {
       }
     },
     "Network": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid4"
+        },
+        "masterInterface": {
+          "$ref": "#/definitions/NetworkMasterInterface"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "linux",
+            "ovs"
+          ]
+        }
+      }
     },
     "NetworkIP4Config": {
       "type": "object",
@@ -4834,6 +5255,9 @@ func init() {
           "format": "int64"
         },
         "fromImage": {
+          "type": "string"
+        },
+        "kernelImage": {
           "type": "string"
         },
         "memory": {
