@@ -362,6 +362,85 @@ type ImageHashMap struct {
 	OtherDisks []string
 }
 
+func GetMetaFromPrk(path string) (*Image, error) {
+	//we need to get the prk file and get the metadata item..
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	archive, err := gzip.NewReader(file)
+
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	tr := tar.NewReader(archive)
+	var img Image
+	count := 0
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		} else if hdr.Name == "_meta" {
+			//load the image metadata..
+			bs, _ := ioutil.ReadAll(tr)
+			err = json.Unmarshal(bs, &img)
+			if err != nil {
+				archive.Close()
+				file.Close()
+				return nil, err
+			}
+			count++
+			if count >= 2 {
+				break
+			}
+		} else if hdr.Name == "boot" {
+			//load the image metadata..
+			bs, _ := ioutil.ReadAll(tr)
+			img.BootParams = string(bs)
+			count++
+			if count >= 2 {
+				break
+			}
+		}
+	}
+	fi, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	stat := fi.Sys().(*syscall.Stat_t)
+	img.createdAt = time.Unix(int64(stat.Ctim.Sec), int64(stat.Ctim.Nsec))
+
+	pd, _ := strfmt.ParseDateTime(img.createdAt.Format("2006-01-02T15:04:05"))
+	//println(pd.String() + " - " + img.createdAt.Format("2006-01-02T15:04:05"))
+	img.Image.CreatedAt = pd
+
+	//set image flags based on cotnains field...
+	if img_contains(img.Contains, models.ImageContainsRootDisk) {
+		img.setFlag(common.ImageHasDisk)
+	}
+	if img_contains(img.Contains, models.ImageContainsKernel) {
+		img.setFlag(common.ImageHasKernel)
+	}
+	if img_contains(img.Contains, models.ImageContainsAdditionalDisks) {
+		img.setFlag(common.ImageHasAdditionalDisk)
+	}
+	if img_contains(img.Contains, models.ImageContainsCloudInitUserData) {
+		img.setFlag(common.ImageHasCloudInit)
+	}
+
+	archive.Close()
+	file.Close()
+
+	img.isPrk = true
+	img.backendType = common.QcowImageBackend
+	img.prkPath = path
+	return &img, nil
+
+}
+
 func LoadImageFromPrk(path string, imagesCache map[string]*ImageCacheFile) (*Image, error) {
 	//we need to get the prk file and get the metadata item..
 	file, err := os.Open(path)
@@ -814,7 +893,7 @@ func (im *Image) GetKernelReader() (*os.File, io.Reader, error) {
 
 		}
 	}
-	return nil, nil, errors.New("This image doesnt contain a root disk")
+	return nil, nil, errors.New("This image doesnt contain a kernel disk")
 }
 
 func (im *Image) GetCloudInitReader() (*os.File, io.Reader, error) {
@@ -826,6 +905,39 @@ func (im *Image) GetAdditionalDiskReader(index int) (*os.File, io.Reader, error)
 	return nil, nil, nil
 
 }
+
+// func (im *Image) GetBootParams() (string, error) {
+// 	file, err := os.Open(im.prkPath)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer file.Close()
+// 	archive, err := gzip.NewReader(file)
+// 	if err != nil {
+// 		return "", err
+// 	}
+// 	defer archive.Close()
+// 	tr := tar.NewReader(archive)
+
+// 	for {
+// 		hdr, err := tr.Next()
+// 		if err == io.EOF {
+// 			break
+// 		} else if err != nil {
+// 			return "", err
+// 		} else if hdr.Name == "boot" {
+// 			//now lets read everything now...
+// 			ba, err := ioutil.ReadAll(tr)
+// 			if err != nil {
+// 				return "", err
+// 			}
+// 			return string(ba), nil
+// 		}
+
+// 	}
+// 	return "", errors.New("Unable to get boot params file")
+
+// }
 
 func (im *Image) setFlag(flag common.ImageContainsBits) {
 	im.contains = flag | im.contains

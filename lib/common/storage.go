@@ -16,6 +16,7 @@ type StorageDriver interface {
 	GetURI() string
 	GetImages() ([]Image, error)
 	//ImportImage(srcPrkPath string) (*images.Image, error)
+	ImportImageFromRdr(stream io.ReadCloser) error
 	GetImage(name string) (Image, error)
 	GetImageById(id string) (Image, error)
 	//GetDisks() ([]*VmmStorageDisk, error)

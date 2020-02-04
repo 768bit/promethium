@@ -25,6 +25,41 @@ type Client struct {
 }
 
 /*
+CreateImage creates a new image
+
+Create a new Image
+*/
+func (a *Client) CreateImage(params *CreateImageParams) (*CreateImageOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewCreateImageParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "createImage",
+		Method:             "POST",
+		PathPattern:        "/images",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &CreateImageReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*CreateImageOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*CreateImageDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
 GetImagesList gets a list of images
 
 Returns a list of Images
@@ -56,6 +91,76 @@ func (a *Client) GetImagesList(params *GetImagesListParams) (*GetImagesListOK, e
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*GetImagesListDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+PullImage pulls an image to the server
+
+Pull an image to the server
+*/
+func (a *Client) PullImage(params *PullImageParams) (*PullImageOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewPullImageParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "pullImage",
+		Method:             "POST",
+		PathPattern:        "/images/pull",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"multipart/form-data"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &PullImageReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*PullImageOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*PullImageDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+PushImage pushes an image to the server
+
+Push an image to the server
+*/
+func (a *Client) PushImage(params *PushImageParams) (*PushImageOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewPushImageParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "pushImage",
+		Method:             "POST",
+		PathPattern:        "/images/push",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"multipart/form-data"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &PushImageReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*PushImageOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*PushImageDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

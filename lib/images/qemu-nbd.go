@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"os/user"
 	"regexp"
 	"strconv"
 	"strings"
@@ -68,6 +67,11 @@ func getNbdDeviceList() ([]string, error) {
 			matched, _ := regexp.Match(`^/dev/nbd\d+$`, []byte(item))
 			if matched {
 				resArr = append(resArr, item)
+				//quick chown...
+				cmd := vutils.Exec.CreateAsyncCommand("chown", false, fmt.Sprintf("%d", UID), item).Sudo()
+				if err := cmd.StartAndWait(); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -123,8 +127,8 @@ var NoQemuNbdDeviceAvailable error = errors.New("No Free Qemu NBD Devices are av
 
 func (qn *qemuNbd) getFirstDev() string {
 	for _, dev := range qn.devList {
-		_, ok := qn.devMap[dev]
-		if !ok {
+		v, ok := qn.devMap[dev]
+		if !ok || v == nil {
 			return dev
 		}
 	}
@@ -174,7 +178,18 @@ func (qn *qemuNbd) init() *qemuNbd {
 	return qn
 }
 
-var QemuNbd *qemuNbd = newQemuNbdDaemon()
+var QemuNbd *qemuNbd
+var UID int
+var GID int
+
+func StartQemuNbd(uid int, gid int) {
+	if QemuNbd != nil {
+		return
+	}
+	UID = uid
+	GID = gid
+	QemuNbd = newQemuNbdDaemon()
+}
 
 func CreateNewQemuImage(path string, size uint64) (*QemuImage, error) {
 	qi := &QemuImage{
@@ -364,11 +379,36 @@ func (qi *QemuImage) IsMounted() bool {
 }
 
 func (qi *QemuImage) ConvertImgRaw(dest string) error {
-	return vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "raw", qi.path, dest).Sudo().BindToStdoutAndStdErr().StartAndWait()
+	if qi.connected {
+		err := qi.Disconnect()
+		if err != nil {
+			return err
+		}
+		err = vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "raw", qi.path, dest).BindToStdoutAndStdErr().StartAndWait()
+		if err != nil {
+			return err
+		}
+		return qi.Connect()
+	}
+
+	return vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "raw", qi.path, dest).BindToStdoutAndStdErr().StartAndWait()
 }
 
 func (qi *QemuImage) ConvertImgRawDevice(dest string) error {
-	return vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "host_device", qi.path, dest).Sudo().BindToStdoutAndStdErr().StartAndWait()
+	if qi.connected {
+		err := qi.Disconnect()
+		if err != nil {
+			return err
+		}
+		err = vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "host_device", qi.path, dest).BindToStdoutAndStdErr().StartAndWait()
+
+		if err != nil {
+			return err
+		}
+		return qi.Connect()
+	}
+
+	return vutils.Exec.CreateAsyncCommand("qemu-img", false, "convert", "-O", "host_device", qi.path, dest).BindToStdoutAndStdErr().StartAndWait()
 }
 
 func (qi *QemuImage) VirtualSize() uint64 {
@@ -467,6 +507,10 @@ func (qi *QemuImage) GrowFullPart() error {
 	// if err != nil {
 	// 	return err
 	// }
+	//println(err.Error())
+	if err := vutils.Exec.CreateAsyncCommand("e2fsck", false, "-f", "-p", qi.connectedDevice).BindToStdoutAndStdErr().StartAndWait(); err != nil {
+		return err
+	}
 	cmd := vutils.Exec.CreateAsyncCommand("resize2fs", false, qi.connectedDevice).Sudo()
 	err := cmd.BindToStdoutAndStdErr().StartAndWait()
 	if err != nil {
@@ -481,12 +525,12 @@ func (qi *QemuImage) loadDisk() error {
 	if isBlk, err := qi.isBlockDevice(); err != nil {
 		return err
 	} else if !isBlk {
-		usr, _ := user.Current()
-		//quick chown...
-		cmd := vutils.Exec.CreateAsyncCommand("chown", false, usr.Username, qi.connectedDevice).Sudo()
-		if err := cmd.StartAndWait(); err != nil {
-			return err
-		}
+		// usr, _ := user.Current()
+		// //quick chown...
+		// cmd := vutils.Exec.CreateAsyncCommand("chown", false, usr.Username, qi.connectedDevice).Sudo()
+		// if err := cmd.StartAndWait(); err != nil {
+		// 	return err
+		// }
 	}
 	devPath, err := qi.getImageDevicePath()
 	if err != nil {
@@ -568,10 +612,10 @@ func (qi *QemuImage) closeDisk() error {
 	if isBlk, err := qi.isBlockDevice(); err != nil {
 		return err
 	} else if !isBlk {
-		cmd := vutils.Exec.CreateAsyncCommand("chown", false, "root", qi.connectedDevice).Sudo()
-		if err := cmd.StartAndWait(); err != nil {
-			return err
-		}
+		// cmd := vutils.Exec.CreateAsyncCommand("chown", false, "root", qi.connectedDevice).Sudo()
+		// if err := cmd.StartAndWait(); err != nil {
+		// 	return err
+		// }
 	}
 	return nil
 }
@@ -762,7 +806,7 @@ func (qi *QemuImage) Mount() (string, error) {
 		return "", err
 	}
 	qi.mountPoint = tdir
-	cmd := vutils.Exec.CreateAsyncCommand("mount", false, qi.connectedDevice, qi.mountPoint).Sudo()
+	cmd := vutils.Exec.CreateAsyncCommand("mount", false, qi.connectedDevice, qi.mountPoint)
 	err = cmd.StartAndWait()
 	if err != nil {
 		return "", err
@@ -794,7 +838,7 @@ func (qi *QemuImage) Unmount() error {
 		}
 		return nil
 	}
-	cmd := vutils.Exec.CreateAsyncCommand("umount", false, qi.mountPoint).Sudo()
+	cmd := vutils.Exec.CreateAsyncCommand("umount", false, qi.mountPoint)
 	err := cmd.StartAndWait()
 	if err != nil {
 		return err
@@ -1154,7 +1198,7 @@ func runSecureErase(file *os.File, fileSize int64, chunkParts int64, level QemuI
 const IMAGE_WIPE_CHUNK_SIZE = 1 * (1 << 20)
 
 func openTargetForErase(targetFile string) (file *os.File, chunkParts int64, err error) {
-	file, err = os.OpenFile(targetFile, os.O_RDWR, 0666)
+	file, err = os.OpenFile(targetFile, os.O_RDWR, 0600)
 	if err != nil {
 		return
 	}
@@ -1630,7 +1674,7 @@ func (qp *QemuImagePartition) MountAt(path string) error {
 		if !vutils.Files.PathExists(path) {
 			return errors.New("Mount point does not exist")
 		}
-		cmd := vutils.Exec.CreateAsyncCommand("mount", false, qp.dev, path).Sudo()
+		cmd := vutils.Exec.CreateAsyncCommand("mount", false, qp.dev, path)
 		err := cmd.StartAndWait()
 		if err != nil {
 			return err
@@ -1663,7 +1707,7 @@ func (qp *QemuImagePartition) Unmount() error {
 
 func (qp *QemuImagePartition) UnmountAt(path string) error {
 	if v, ok := qp.mountMap[path]; ok && v {
-		cmd := vutils.Exec.CreateAsyncCommand("umount", false, path).Sudo()
+		cmd := vutils.Exec.CreateAsyncCommand("umount", false, path)
 		err := cmd.StartAndWait()
 		if err != nil {
 			return err
@@ -1734,12 +1778,12 @@ func (qp *QemuImagePartition) GrowPart() error {
 	_, err := qp.img.GetPartition(qp.index + 1)
 	if err == PartitionMissingError {
 		//we are good, lets do this!
-		cmd := vutils.Exec.CreateAsyncCommand("growpart", false, qp.img.connectedDevice, fmt.Sprintf("%d", qp.index)).Sudo()
+		cmd := vutils.Exec.CreateAsyncCommand("growpart", false, qp.img.connectedDevice, fmt.Sprintf("%d", qp.index))
 		err = cmd.BindToStdoutAndStdErr().StartAndWait()
 		if err != nil {
 			return err
 		}
-		cmd = vutils.Exec.CreateAsyncCommand("resize2fs", false, qp.dev).Sudo()
+		cmd = vutils.Exec.CreateAsyncCommand("resize2fs", false, qp.dev)
 		err = cmd.BindToStdoutAndStdErr().StartAndWait()
 		if err != nil {
 			return err

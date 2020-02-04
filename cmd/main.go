@@ -32,6 +32,7 @@ func main() {
 	app.Version = fmt.Sprintf("%s  Git Commit: %s  Build Date: %s", Version, GitCommit, strings.Replace(BuildDate, "_", " ", -1))
 
 	app.Commands = []*cli.Command{
+		&InstallCommand,
 		&daemon.RunDaemonCommand,
 		&vmm.VmmSubCommand,
 		&img.ImagesSubCommand,

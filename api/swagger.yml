@@ -508,6 +508,81 @@
             description: "Invalid ID supplied"
           404:
             description: "VM not found"
+    /vms/{vmID}/restart:
+      get:
+        tags:
+          - vms
+        summary: "Restart a VM instance"
+        description: "Gracefully Restart an instance of VM"
+        operationId: "restartVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/shutdown:
+      get:
+        tags:
+          - vms
+        summary: "Shutdown a VM instance"
+        description: "Gracefully Shutdown an instance of VM"
+        operationId: "shutdownVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
+    /vms/{vmID}/reset:
+      get:
+        tags:
+          - vms
+        summary: "Reset a VM instance"
+        description: "Forcefully Reset an instance of VM"
+        operationId: "resetVM"
+        produces:
+          - "application/json"
+
+        parameters:
+          - name: "vmID"
+            in: "path"
+            description: "ID of VM to return"
+            required: true
+            type: "string"
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          400:
+            description: "Invalid ID supplied"
+          404:
+            description: "VM not found"
     /vms/{vmID}/console:
       get:
         tags:
@@ -1102,7 +1177,7 @@
               $ref: '#/definitions/error'
       post:
         tags:
-          - vms
+          - images
         summary: "Create a new Image"
         description: "Create a new Image"
         operationId: "createImage"
@@ -1125,7 +1200,84 @@
             description: "unexpected error"
             schema:
               $ref: '#/definitions/error'
+    /images/push:
+      post:
+        tags:
+          - images
+        summary: "Push an image to the server"
+        description: "Push an image to the server"
+        operationId: "pushImage"
+        produces:
+          - "application/json"
+        consumes:
+          - multipart/form-data
+        parameters:
+          - in: formData
+            name: inFileBlob
+            type: file
+            description: The file to upload.
+          - name: "targetStorage"
+            in: "formData"
+            description: "Storage Target"
+            type: string
+          - name: "sourceURI"
+            in: "formData"
+            description: "SourceURI for remote pull"
+            type: string
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
+    /images/pull:
+      post:
+        tags:
+          - images
+        summary: "Pull an image to the server"
+        description: "Pull an image to the server"
+        operationId: "pullImage"
+        produces:
+          - "application/json"
+        consumes:
+          - multipart/form-data
+        parameters:
+          - name: "targetStorage"
+            in: "formData"
+            description: "Storage Target"
+            type: string
+          - name: "sourceURI"
+            in: "formData"
+            description: "SourceURI for remote pull"
+            type: string
+        responses:
+          200:
+            description: "successful operation"
+            schema:
+              $ref: "#/definitions/VM"
+          default:
+            description: "unexpected error"
+            schema:
+              $ref: '#/definitions/error'
   definitions:
+    ImagePushPullTarget:
+      type: object
+      properties:
+        SourceURI:
+          type: string
+        Blob:
+          type: string
+          format: binary
+        TargetStorage:
+          type: string
+
+      xml:
+        name: "ImagePushPullTarget"
+
+
     Image:
       type: object
       properties:

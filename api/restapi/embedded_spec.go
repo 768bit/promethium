@@ -91,7 +91,7 @@ func init() {
           "application/json"
         ],
         "tags": [
-          "vms"
+          "images"
         ],
         "summary": "Create a new Image",
         "operationId": "createImage",
@@ -104,6 +104,100 @@ func init() {
             "schema": {
               "$ref": "#/definitions/NewImage"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "default": {
+            "description": "unexpected error",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/images/pull": {
+      "post": {
+        "description": "Pull an image to the server",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "images"
+        ],
+        "summary": "Pull an image to the server",
+        "operationId": "pullImage",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Storage Target",
+            "name": "targetStorage",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "SourceURI for remote pull",
+            "name": "sourceURI",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "default": {
+            "description": "unexpected error",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/images/push": {
+      "post": {
+        "description": "Push an image to the server",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "images"
+        ],
+        "summary": "Push an image to the server",
+        "operationId": "pushImage",
+        "parameters": [
+          {
+            "type": "file",
+            "description": "The file to upload.",
+            "name": "inFileBlob",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Storage Target",
+            "name": "targetStorage",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "SourceURI for remote pull",
+            "name": "sourceURI",
+            "in": "formData"
           }
         ],
         "responses": {
@@ -1315,6 +1409,114 @@ func init() {
         }
       }
     },
+    "/vms/{vmID}/reset": {
+      "get": {
+        "description": "Forcefully Reset an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Reset a VM instance",
+        "operationId": "resetVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vmID}/restart": {
+      "get": {
+        "description": "Gracefully Restart an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Restart a VM instance",
+        "operationId": "restartVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vmID}/shutdown": {
+      "get": {
+        "description": "Gracefully Shutdown an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Shutdown a VM instance",
+        "operationId": "shutdownVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
     "/vms/{vmID}/start": {
       "get": {
         "description": "Starts an isntance of VM",
@@ -1847,6 +2049,24 @@ func init() {
         "AdditionalDisks",
         "CloudInitUserData"
       ]
+    },
+    "ImagePushPullTarget": {
+      "type": "object",
+      "properties": {
+        "Blob": {
+          "type": "string",
+          "format": "binary"
+        },
+        "SourceURI": {
+          "type": "string"
+        },
+        "TargetStorage": {
+          "type": "string"
+        }
+      },
+      "xml": {
+        "name": "ImagePushPullTarget"
+      }
     },
     "KernelImage": {
       "type": "object",
@@ -2918,7 +3138,7 @@ func init() {
           "application/json"
         ],
         "tags": [
-          "vms"
+          "images"
         ],
         "summary": "Create a new Image",
         "operationId": "createImage",
@@ -2931,6 +3151,100 @@ func init() {
             "schema": {
               "$ref": "#/definitions/NewImage"
             }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "default": {
+            "description": "unexpected error",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/images/pull": {
+      "post": {
+        "description": "Pull an image to the server",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "images"
+        ],
+        "summary": "Pull an image to the server",
+        "operationId": "pullImage",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Storage Target",
+            "name": "targetStorage",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "SourceURI for remote pull",
+            "name": "sourceURI",
+            "in": "formData"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "default": {
+            "description": "unexpected error",
+            "schema": {
+              "$ref": "#/definitions/error"
+            }
+          }
+        }
+      }
+    },
+    "/images/push": {
+      "post": {
+        "description": "Push an image to the server",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "images"
+        ],
+        "summary": "Push an image to the server",
+        "operationId": "pushImage",
+        "parameters": [
+          {
+            "type": "file",
+            "description": "The file to upload.",
+            "name": "inFileBlob",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "Storage Target",
+            "name": "targetStorage",
+            "in": "formData"
+          },
+          {
+            "type": "string",
+            "description": "SourceURI for remote pull",
+            "name": "sourceURI",
+            "in": "formData"
           }
         ],
         "responses": {
@@ -4142,6 +4456,114 @@ func init() {
         }
       }
     },
+    "/vms/{vmID}/reset": {
+      "get": {
+        "description": "Forcefully Reset an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Reset a VM instance",
+        "operationId": "resetVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vmID}/restart": {
+      "get": {
+        "description": "Gracefully Restart an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Restart a VM instance",
+        "operationId": "restartVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
+    "/vms/{vmID}/shutdown": {
+      "get": {
+        "description": "Gracefully Shutdown an instance of VM",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "vms"
+        ],
+        "summary": "Shutdown a VM instance",
+        "operationId": "shutdownVM",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ID of VM to return",
+            "name": "vmID",
+            "in": "path",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "successful operation",
+            "schema": {
+              "$ref": "#/definitions/VM"
+            }
+          },
+          "400": {
+            "description": "Invalid ID supplied"
+          },
+          "404": {
+            "description": "VM not found"
+          }
+        }
+      }
+    },
     "/vms/{vmID}/start": {
       "get": {
         "description": "Starts an isntance of VM",
@@ -4674,6 +5096,24 @@ func init() {
         "AdditionalDisks",
         "CloudInitUserData"
       ]
+    },
+    "ImagePushPullTarget": {
+      "type": "object",
+      "properties": {
+        "Blob": {
+          "type": "string",
+          "format": "binary"
+        },
+        "SourceURI": {
+          "type": "string"
+        },
+        "TargetStorage": {
+          "type": "string"
+        }
+      },
+      "xml": {
+        "name": "ImagePushPullTarget"
+      }
     },
     "KernelImage": {
       "type": "object",

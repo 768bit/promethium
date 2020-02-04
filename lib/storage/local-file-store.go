@@ -127,6 +127,56 @@ func (lfs *LocalFileStorage) GetImage(name string) (common.Image, error) {
 		return img, nil
 	}
 }
+func (lfs *LocalFileStorage) ImportImageFromRdr(stream io.ReadCloser) error {
+	//store reader in images area
+	tuuid, _ := vutils.UUID.MakeUUIDString()
+	fpath := filepath.Join(lfs.imagesFolder, tuuid+".prk.tmp")
+	defer stream.Close()
+	of, err := os.Create(fpath)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(of, stream)
+	if err != nil {
+		of.Close()
+		os.RemoveAll(fpath)
+		return err
+	}
+	//on success we move it now so it can be used..
+	//lets peek into the image - perhaps it exists already...
+	img, err := images.GetMetaFromPrk(fpath)
+	if err != nil {
+		of.Close()
+		os.RemoveAll(fpath)
+		return err
+	} else {
+		fimg, err := lfs.sm.GetImageByID(img.GetID())
+		if err == nil && fimg != nil {
+			of.Close()
+			return errors.New("Image with that ID already exists")
+		}
+	}
+	of.Close()
+	destPath := filepath.Join(lfs.imagesFolder, img.Name+"-"+img.Version+".prk")
+	if vutils.Files.CheckPathExists(destPath) {
+		os.RemoveAll(fpath)
+		return errors.New("Image with that Name and Version already exists")
+	}
+	err = os.Rename(fpath, destPath)
+	if err != nil {
+		//of.Close()
+		os.RemoveAll(fpath)
+		return err
+	}
+	_, err = images.LoadImageFromPrk(destPath, lfs.sm.imagesCache)
+	if err != nil {
+		//of.Close()
+		//os.RemoveAll(destPath)
+		return err
+	}
+	return nil
+
+}
 
 func (lfs *LocalFileStorage) GetImageById(id string) (common.Image, error) {
 
@@ -209,7 +259,7 @@ func (lfs *LocalFileStorage) LookupPath(path string) (string, bool, error) {
 		if len(splitPath) != 3 {
 			return "", false, errors.New("The supplied path is invalid")
 		}
-		return filepath.Join(lfs.disksFolder, splitPath[1], splitPath[2]+".qcow2"), false, nil
+		return filepath.Join(lfs.disksFolder, splitPath[1], splitPath[2]), false, nil
 	}
 	return "", false, nil
 }
@@ -228,6 +278,7 @@ func (lfs *LocalFileStorage) WriteKernel(id string, source io.Reader) (string, e
 func (lfs *LocalFileStorage) WriteRootDisk(id string, source io.Reader, newSize int64, sourceIsRaw bool, growPart bool) (string, error) {
 	//output the qcow2 image somewhere (it came from an image), unless its raw, in which case we just pump it to dest...
 	newDiskPath := filepath.Join(lfs.disksFolder, id, "root.img")
+	vutils.Files.CreateDirIfNotExist(filepath.Join(lfs.disksFolder, id))
 	if sourceIsRaw {
 		//create the dest file by pumping to dest
 
@@ -282,7 +333,7 @@ func resizeRawImage(path string, newSize int64, growPart bool) error {
 
 func writeAndConvertQcow2(outpath string, source io.Reader, newSize int64, destIsDevice bool, growPart bool) error {
 	//create a temporary file path...
-	tdir, err := ioutil.TempDir("", "prmbuild")
+	tdir, err := ioutil.TempDir("", "prmextract")
 	if err != nil {
 		return err
 	}
@@ -307,9 +358,10 @@ func writeAndConvertQcow2(outpath string, source io.Reader, newSize int64, destI
 	if err != nil {
 		return err
 	}
+
 	nsu := uint64(newSize)
 	if nsu < qcimg.VirtualSize() {
-		//err
+		return errors.New("Size is smaller")
 	} else if nsu > qcimg.VirtualSize() {
 		//resize/expand
 		err := qcimg.Resize(nsu)
@@ -317,6 +369,10 @@ func writeAndConvertQcow2(outpath string, source io.Reader, newSize int64, destI
 			return err
 		}
 		if growPart {
+			err = qcimg.Connect()
+			if err != nil {
+				return err
+			}
 			err = qcimg.GrowFullPart()
 			if err != nil {
 				println("Error growing part:" + err.Error())

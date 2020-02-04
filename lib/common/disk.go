@@ -91,11 +91,11 @@ func (vmd *VmmStorageDisk) establishStorageType() (DiskFileFormat, error) {
 	}
 }
 
-func (vmd *VmmStorageDisk) ToDiskConfig() *config.VmmDiskConfig {
+func (vmd *VmmStorageDisk) ToDiskConfig(IsRoot bool) *config.VmmDiskConfig {
 	//check what type of device this is..
 	fullStorageUri := vmd.storageDriver.GetURI() + "/disks/" + vmd.id + "/" + vmd.name
 	isRoot := false
-	if vmd.name == "root" {
+	if IsRoot {
 		isRoot = true
 	}
 	return &config.VmmDiskConfig{

@@ -17,7 +17,8 @@ var ListImagesCommand = cli.Command{
 	Usage:   "List images.",
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
-			Name: "all, a",
+			Name:    "all",
+			Aliases: []string{"a"},
 		},
 	},
 	Action: func(c *cli.Context) error {

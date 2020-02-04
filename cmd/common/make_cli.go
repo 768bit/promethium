@@ -38,7 +38,7 @@ func MakeClientUnix() *client.Promethium {
 	httpc := http.Client{
 		Transport: &http.Transport{
 			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", "/tmp/promethium")
+				return net.Dial("unix", "/tmp/promethium.sock")
 			},
 		},
 	}
@@ -65,7 +65,7 @@ func MakeWebSocketClientUnix(path string) (*websocket.Conn, error) {
 	netDialer := &net.Dialer{}
 	websocket.DefaultDialer.NetDial = func(network, addr string) (net.Conn, error) {
 		println("Connecting to Unix Socket")
-		return netDialer.DialContext(context.Background(), "unix", "/tmp/promethium")
+		return netDialer.DialContext(context.Background(), "unix", "/tmp/promethium.sock")
 	}
 	//nc, err := websocket.DefaultDialer.NetDial("unix", "/tmp/promethium")
 	// nc, err := net.Dial("unix", "/tmp/promethium")

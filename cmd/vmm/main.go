@@ -48,6 +48,10 @@ var VmmSubCommand = cli.Command{
 		&ListInstancesCommand,
 		&CreateInstanceCommand,
 		&StartInstanceCommand,
+		&StopInstanceCommand,
+		&ShutdownInstanceCommand,
+		&ResetInstanceCommand,
+		&RestartInstanceCommand,
 		&InstanceConsoleCommand,
 	},
 }

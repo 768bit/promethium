@@ -28,20 +28,21 @@ import (
 // NewServerAPI creates a new Server instance
 func NewServerAPI(spec *loads.Document) *ServerAPI {
 	return &ServerAPI{
-		handlers:            make(map[string]map[string]http.Handler),
-		formats:             strfmt.Default,
-		defaultConsumes:     "application/json",
-		defaultProduces:     "application/json",
-		customConsumers:     make(map[string]runtime.Consumer),
-		customProducers:     make(map[string]runtime.Producer),
-		ServerShutdown:      func() {},
-		spec:                spec,
-		ServeError:          errors.ServeError,
-		BasicAuthenticator:  security.BasicAuth,
-		APIKeyAuthenticator: security.APIKeyAuth,
-		BearerAuthenticator: security.BearerAuth,
-		JSONConsumer:        runtime.JSONConsumer(),
-		JSONProducer:        runtime.JSONProducer(),
+		handlers:              make(map[string]map[string]http.Handler),
+		formats:               strfmt.Default,
+		defaultConsumes:       "application/json",
+		defaultProduces:       "application/json",
+		customConsumers:       make(map[string]runtime.Consumer),
+		customProducers:       make(map[string]runtime.Producer),
+		ServerShutdown:        func() {},
+		spec:                  spec,
+		ServeError:            errors.ServeError,
+		BasicAuthenticator:    security.BasicAuth,
+		APIKeyAuthenticator:   security.APIKeyAuth,
+		BearerAuthenticator:   security.BearerAuth,
+		JSONConsumer:          runtime.JSONConsumer(),
+		MultipartformConsumer: runtime.DiscardConsumer,
+		JSONProducer:          runtime.JSONProducer(),
 		StorageGetStorageStorageIDDisksHandler: storage.GetStorageStorageIDDisksHandlerFunc(func(params storage.GetStorageStorageIDDisksParams) middleware.Responder {
 			return middleware.NotImplemented("operation StorageGetStorageStorageIDDisks has not yet been implemented")
 		}),
@@ -51,8 +52,8 @@ func NewServerAPI(spec *loads.Document) *ServerAPI {
 		StorageGetStorageStorageIDKernelsHandler: storage.GetStorageStorageIDKernelsHandlerFunc(func(params storage.GetStorageStorageIDKernelsParams) middleware.Responder {
 			return middleware.NotImplemented("operation StorageGetStorageStorageIDKernels has not yet been implemented")
 		}),
-		VmsCreateImageHandler: vms.CreateImageHandlerFunc(func(params vms.CreateImageParams) middleware.Responder {
-			return middleware.NotImplemented("operation VmsCreateImage has not yet been implemented")
+		ImagesCreateImageHandler: images.CreateImageHandlerFunc(func(params images.CreateImageParams) middleware.Responder {
+			return middleware.NotImplemented("operation ImagesCreateImage has not yet been implemented")
 		}),
 		NetworkingCreateNetworkHandler: networking.CreateNetworkHandlerFunc(func(params networking.CreateNetworkParams) middleware.Responder {
 			return middleware.NotImplemented("operation NetworkingCreateNetwork has not yet been implemented")
@@ -138,6 +139,21 @@ func NewServerAPI(spec *loads.Document) *ServerAPI {
 		VmsGetVMVolumeListHandler: vms.GetVMVolumeListHandlerFunc(func(params vms.GetVMVolumeListParams) middleware.Responder {
 			return middleware.NotImplemented("operation VmsGetVMVolumeList has not yet been implemented")
 		}),
+		ImagesPullImageHandler: images.PullImageHandlerFunc(func(params images.PullImageParams) middleware.Responder {
+			return middleware.NotImplemented("operation ImagesPullImage has not yet been implemented")
+		}),
+		ImagesPushImageHandler: images.PushImageHandlerFunc(func(params images.PushImageParams) middleware.Responder {
+			return middleware.NotImplemented("operation ImagesPushImage has not yet been implemented")
+		}),
+		VmsResetVMHandler: vms.ResetVMHandlerFunc(func(params vms.ResetVMParams) middleware.Responder {
+			return middleware.NotImplemented("operation VmsResetVM has not yet been implemented")
+		}),
+		VmsRestartVMHandler: vms.RestartVMHandlerFunc(func(params vms.RestartVMParams) middleware.Responder {
+			return middleware.NotImplemented("operation VmsRestartVM has not yet been implemented")
+		}),
+		VmsShutdownVMHandler: vms.ShutdownVMHandlerFunc(func(params vms.ShutdownVMParams) middleware.Responder {
+			return middleware.NotImplemented("operation VmsShutdownVM has not yet been implemented")
+		}),
 		VmsStartVMHandler: vms.StartVMHandlerFunc(func(params vms.StartVMParams) middleware.Responder {
 			return middleware.NotImplemented("operation VmsStartVM has not yet been implemented")
 		}),
@@ -189,6 +205,8 @@ type ServerAPI struct {
 
 	// JSONConsumer registers a consumer for a "application/json" mime type
 	JSONConsumer runtime.Consumer
+	// MultipartformConsumer registers a consumer for a "multipart/form-data" mime type
+	MultipartformConsumer runtime.Consumer
 
 	// JSONProducer registers a producer for a "application/json" mime type
 	JSONProducer runtime.Producer
@@ -199,8 +217,8 @@ type ServerAPI struct {
 	StorageGetStorageStorageIDImagesHandler storage.GetStorageStorageIDImagesHandler
 	// StorageGetStorageStorageIDKernelsHandler sets the operation handler for the get storage storage ID kernels operation
 	StorageGetStorageStorageIDKernelsHandler storage.GetStorageStorageIDKernelsHandler
-	// VmsCreateImageHandler sets the operation handler for the create image operation
-	VmsCreateImageHandler vms.CreateImageHandler
+	// ImagesCreateImageHandler sets the operation handler for the create image operation
+	ImagesCreateImageHandler images.CreateImageHandler
 	// NetworkingCreateNetworkHandler sets the operation handler for the create network operation
 	NetworkingCreateNetworkHandler networking.CreateNetworkHandler
 	// StorageCreateStorageHandler sets the operation handler for the create storage operation
@@ -257,6 +275,16 @@ type ServerAPI struct {
 	VmsGetVMVolumeHandler vms.GetVMVolumeHandler
 	// VmsGetVMVolumeListHandler sets the operation handler for the get VM volume list operation
 	VmsGetVMVolumeListHandler vms.GetVMVolumeListHandler
+	// ImagesPullImageHandler sets the operation handler for the pull image operation
+	ImagesPullImageHandler images.PullImageHandler
+	// ImagesPushImageHandler sets the operation handler for the push image operation
+	ImagesPushImageHandler images.PushImageHandler
+	// VmsResetVMHandler sets the operation handler for the reset VM operation
+	VmsResetVMHandler vms.ResetVMHandler
+	// VmsRestartVMHandler sets the operation handler for the restart VM operation
+	VmsRestartVMHandler vms.RestartVMHandler
+	// VmsShutdownVMHandler sets the operation handler for the shutdown VM operation
+	VmsShutdownVMHandler vms.ShutdownVMHandler
 	// VmsStartVMHandler sets the operation handler for the start VM operation
 	VmsStartVMHandler vms.StartVMHandler
 	// VmsStopVMHandler sets the operation handler for the stop VM operation
@@ -332,6 +360,10 @@ func (o *ServerAPI) Validate() error {
 		unregistered = append(unregistered, "JSONConsumer")
 	}
 
+	if o.MultipartformConsumer == nil {
+		unregistered = append(unregistered, "MultipartformConsumer")
+	}
+
 	if o.JSONProducer == nil {
 		unregistered = append(unregistered, "JSONProducer")
 	}
@@ -348,8 +380,8 @@ func (o *ServerAPI) Validate() error {
 		unregistered = append(unregistered, "storage.GetStorageStorageIDKernelsHandler")
 	}
 
-	if o.VmsCreateImageHandler == nil {
-		unregistered = append(unregistered, "vms.CreateImageHandler")
+	if o.ImagesCreateImageHandler == nil {
+		unregistered = append(unregistered, "images.CreateImageHandler")
 	}
 
 	if o.NetworkingCreateNetworkHandler == nil {
@@ -464,6 +496,26 @@ func (o *ServerAPI) Validate() error {
 		unregistered = append(unregistered, "vms.GetVMVolumeListHandler")
 	}
 
+	if o.ImagesPullImageHandler == nil {
+		unregistered = append(unregistered, "images.PullImageHandler")
+	}
+
+	if o.ImagesPushImageHandler == nil {
+		unregistered = append(unregistered, "images.PushImageHandler")
+	}
+
+	if o.VmsResetVMHandler == nil {
+		unregistered = append(unregistered, "vms.ResetVMHandler")
+	}
+
+	if o.VmsRestartVMHandler == nil {
+		unregistered = append(unregistered, "vms.RestartVMHandler")
+	}
+
+	if o.VmsShutdownVMHandler == nil {
+		unregistered = append(unregistered, "vms.ShutdownVMHandler")
+	}
+
 	if o.VmsStartVMHandler == nil {
 		unregistered = append(unregistered, "vms.StartVMHandler")
 	}
@@ -531,6 +583,9 @@ func (o *ServerAPI) ConsumersFor(mediaTypes []string) map[string]runtime.Consume
 
 		case "application/json":
 			result["application/json"] = o.JSONConsumer
+
+		case "multipart/form-data":
+			result["multipart/form-data"] = o.MultipartformConsumer
 
 		}
 
@@ -612,7 +667,7 @@ func (o *ServerAPI) initHandlerCache() {
 	if o.handlers["POST"] == nil {
 		o.handlers["POST"] = make(map[string]http.Handler)
 	}
-	o.handlers["POST"]["/images"] = vms.NewCreateImage(o.context, o.VmsCreateImageHandler)
+	o.handlers["POST"]["/images"] = images.NewCreateImage(o.context, o.ImagesCreateImageHandler)
 
 	if o.handlers["POST"] == nil {
 		o.handlers["POST"] = make(map[string]http.Handler)
@@ -753,6 +808,31 @@ func (o *ServerAPI) initHandlerCache() {
 		o.handlers["GET"] = make(map[string]http.Handler)
 	}
 	o.handlers["GET"]["/vms/{vmID}/volumes"] = vms.NewGetVMVolumeList(o.context, o.VmsGetVMVolumeListHandler)
+
+	if o.handlers["POST"] == nil {
+		o.handlers["POST"] = make(map[string]http.Handler)
+	}
+	o.handlers["POST"]["/images/pull"] = images.NewPullImage(o.context, o.ImagesPullImageHandler)
+
+	if o.handlers["POST"] == nil {
+		o.handlers["POST"] = make(map[string]http.Handler)
+	}
+	o.handlers["POST"]["/images/push"] = images.NewPushImage(o.context, o.ImagesPushImageHandler)
+
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/vms/{vmID}/reset"] = vms.NewResetVM(o.context, o.VmsResetVMHandler)
+
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/vms/{vmID}/restart"] = vms.NewRestartVM(o.context, o.VmsRestartVMHandler)
+
+	if o.handlers["GET"] == nil {
+		o.handlers["GET"] = make(map[string]http.Handler)
+	}
+	o.handlers["GET"]["/vms/{vmID}/shutdown"] = vms.NewShutdownVM(o.context, o.VmsShutdownVMHandler)
 
 	if o.handlers["GET"] == nil {
 		o.handlers["GET"] = make(map[string]http.Handler)

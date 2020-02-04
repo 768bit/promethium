@@ -46,5 +46,7 @@ var ImagesSubCommand = cli.Command{
 	},
 	Subcommands: []*cli.Command{
 		&ListImagesCommand,
+		&PushImageCommand,
+		&PullImageCommand,
 	},
 }

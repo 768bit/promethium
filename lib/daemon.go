@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -9,11 +10,12 @@ import (
 	"github.com/768bit/promethium/api/restapi"
 	"github.com/768bit/promethium/api/restapi/operations"
 	"github.com/768bit/promethium/lib/config"
+	"github.com/768bit/promethium/lib/service"
 	"github.com/768bit/promethium/lib/vmm"
 	"github.com/go-openapi/loads"
 	"github.com/gorilla/mux"
+	"github.com/jessevdk/go-flags"
 	"gopkg.in/hlandau/easyconfig.v1"
-	"gopkg.in/hlandau/service.v2"
 )
 
 type PromethiumDaemonStatus uint8
@@ -71,21 +73,24 @@ func (pd *PromethiumDaemon) init(foreground bool) error {
 func (pd *PromethiumDaemon) captureInterrupts() {
 
 	pd.exitChan = make(chan os.Signal)
-	signal.Notify(pd.exitChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
+	signal.Notify(pd.exitChan, os.Interrupt, syscall.SIGTERM, syscall.SIGKILL)
 	go func() {
 		for {
 			select {
 			case sig := <-pd.exitChan:
 				switch sig {
 				case syscall.SIGTERM:
+					fmt.Println("SIGTERM")
 					//terminate process... this has a timeout...
 					pd.waitKillVmmManager()
 					pd.waitChan <- true
-				case syscall.SIGINT:
+				case os.Interrupt:
+					fmt.Println("SIGINT")
 					//interrupt process - no time out.. ctrl + c basically...
 					pd.waitKillVmmManager()
 					pd.waitChan <- true
 				case syscall.SIGKILL:
+					fmt.Println("SIGKILL")
 					//forced quit - abort basically..
 					pd.killVmmManager()
 					pd.waitChan <- true
@@ -127,7 +132,16 @@ func (pd *PromethiumDaemon) setupDaemonise() {
 				return err
 			}
 
-			if err := smgr.DropPrivileges(); err != nil {
+			log.Printf("Dropping Daemon Privs...")
+
+			//if err := smgr.DropPrivileges(); err != nil {
+			//	return err
+			//	}
+
+			log.Printf("Daemon Privs Dropped...")
+
+			err := pd.vmmManager.Start()
+			if err != nil {
 				return err
 			}
 
@@ -144,9 +158,9 @@ func (pd *PromethiumDaemon) setupDaemonise() {
 			// Do any necessary teardown.
 			// ...
 
-			log.Printf("Daemon Stop...")
+			pd.waitKillVmmManager()
 
-			pd.stop()
+			log.Printf("Daemon Stop...")
 
 			// Done.
 			return nil
@@ -161,6 +175,10 @@ func (pd *PromethiumDaemon) setupForeground() {
 
 	pd.captureInterrupts()
 	err := pd.Start()
+	if err != nil {
+		println(err.Error())
+	}
+	err = pd.vmmManager.Start()
 	if err != nil {
 		println(err.Error())
 	}
@@ -184,12 +202,26 @@ func (pd *PromethiumDaemon) Start() error {
 	restapi.SetManager(pd.vmmManager)
 	server.ConfigureFlags()
 	server.ConfigureAPI()
-	os.RemoveAll("/tmp/promethium")
-	server.EnabledListeners = append(server.EnabledListeners, "unix", "http")
 
-	server.Host = pd.config.API.BindAddress
-	server.Port = int(pd.config.API.Port)
-	server.SocketPath = "/tmp/promethium"
+	if pd.config.Http != nil && pd.config.Http.Enable {
+		server.EnabledListeners = append(server.EnabledListeners, "http")
+		server.Host = pd.config.Http.BindAddress
+		server.Port = int(pd.config.Http.Port)
+	}
+
+	if pd.config.Unix != nil && pd.config.Unix.Enable {
+		server.EnabledListeners = append(server.EnabledListeners, "unix")
+		if pd.config.Unix.Path == "" {
+			server.SocketPath = config.PROMETHIUM_SOCKET_PATH
+		} else {
+			server.SocketPath = flags.Filename(pd.config.Unix.Path)
+		}
+		os.RemoveAll(string(server.SocketPath))
+	}
+
+	if pd.config.Https != nil && pd.config.Https.Enable {
+
+	}
 
 	go func() {
 		println("Serving")

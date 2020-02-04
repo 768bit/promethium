@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/768bit/firecracker-go-sdk"
@@ -75,6 +76,7 @@ type FireCrackerProcess struct {
 	networkInterfaces []string
 
 	jailerProc            *vutils.ExecAsyncCommand
+	jailerProcRunning     bool
 	jailerBinaryPath      string
 	firecrackerBinaryPath string
 	kernelPath            string
@@ -93,10 +95,13 @@ type FireCrackerProcess struct {
 
 	isPolling bool
 	exitChan  chan error
+	killChan  chan error
 	stateChan chan string
 
 	isRestarting   bool
 	isShuttingDown bool
+	isStopping     bool
+	isStarted      bool
 
 	procExitWaitChan chan error
 
@@ -115,11 +120,12 @@ func (fcp *FireCrackerProcess) init() (*FireCrackerProcess, error) {
 	fcp.jailerBinaryPath = jailerPath
 
 	fcp.chrootPath = filepath.Join(ROOT_PATH, "firecracker", fcp.id, "root")
-	os.RemoveAll(fcp.chrootPath)
+	//os.RemoveAll(fcp.chrootPath)
 	fcp.socketPath = filepath.Join(fcp.chrootPath, "api.socket")
 	fcp.procExitWaitChan = make(chan error)
 	fcp.exitChan = make(chan error)
-	fcp.stateChan = make(chan string)
+	fcp.killChan = make(chan error)
+	fcp.cleanUp()
 	fcp.Status = UNKOWN_STATUS
 	if fcp.jailerProc == nil {
 		err = fcp.startFirecrackerProcess()
@@ -136,17 +142,29 @@ func (fcp *FireCrackerProcess) init() (*FireCrackerProcess, error) {
 }
 
 func (fcp *FireCrackerProcess) startFirecrackerProcess() error {
-	fcp.jailerProc = vutils.Exec.CreateAsyncCommand(fcp.jailerBinaryPath, false,
+	vutils.Files.CreateDirIfNotExist(fcp.chrootPath)
+	fcp.jailerProc = vutils.Exec.CreateAsyncCommand("sudo", false, fcp.jailerBinaryPath,
 		"--id", fcp.id,
 		"--node", "0",
 		"--exec-file", fcp.firecrackerBinaryPath,
 		"--uid", strconv.Itoa(os.Getuid()),
 		"--gid", strconv.Itoa(os.Getgid()),
-		"--chroot-base-dir", ROOT_PATH).Sudo() //.BindToStdoutAndStdErr() //.CaptureStdoutAndStdErr(false, false)
+		"--chroot-base-dir", ROOT_PATH).BindToStdoutAndStdErr() // //.CaptureStdoutAndStdErr(false, false)
+	fcp.jailerProc.Proc.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 	e := fcp.jailerProc.Start()
-	go func() {
-		fcp.procExitWaitChan <- fcp.jailerProc.Wait()
-	}()
+	if e == nil {
+		fmt.Println("Firecracker started")
+		fcp.jailerProcRunning = true
+		go func() {
+			fcp.procExitWaitChan <- fcp.jailerProc.Wait()
+			fmt.Println("Firecracker exited")
+			fcp.jailerProcRunning = false
+		}()
+	} else {
+		fmt.Println("Error starting jailer/firecracker: " + e.Error())
+	}
 	return e
 }
 
@@ -194,7 +212,7 @@ func (fcp *FireCrackerProcess) runBuild() (*core.Image, *util.Repo, string, erro
 func (fcp *FireCrackerProcess) beginPollingLoop() {
 	err := fcp.pollStatus()
 	if err != nil {
-		//fcp.logger.Warnf("Error when doing intial polling: %s", err.Error())
+		fcp.logger.Warnf("Error when doing intial polling: %s", err.Error())
 		fcp.exitChan <- err
 		return
 	}
@@ -218,6 +236,7 @@ func (fcp *FireCrackerProcess) beginPollingLoop() {
 		for {
 			select {
 			case err := <-fcp.exitChan:
+				log.Println("Exit Chan triggered:", err)
 				if err != nil {
 					//there was an error in execution - lets break out of the loops and clean everything up..
 					//the error will also imply a change of state
@@ -226,6 +245,11 @@ func (fcp *FireCrackerProcess) beginPollingLoop() {
 					fcp.Status = "ERROR"
 				}
 				fcp.isPolling = false
+				if fcp.isShuttingDown {
+					//we are shutting down so lets just kill everything...
+					fcp.Stop()
+					return
+				}
 				if fcp.jailerProc != nil && fcp.jailerProc.Proc != nil && fcp.jailerProc.Proc.ProcessState != nil && fcp.jailerProc.Proc.ProcessState.Exited() {
 					//it has exited.. lets remake the process..
 					err := fcp.startFirecrackerProcess()
@@ -247,7 +271,7 @@ func (fcp *FireCrackerProcess) beginPollingLoop() {
 			case newStatus := <-fcp.stateChan:
 				if fcp.Status != newStatus {
 					//state has changed - process this...
-					fcp.logger.Warnf("Status Has changed %s -> %s", fcp.Status, newStatus)
+					log.Printf("Status Has changed %s -> %s\n", fcp.Status, newStatus)
 				}
 				//break
 			}
@@ -257,10 +281,22 @@ func (fcp *FireCrackerProcess) beginPollingLoop() {
 
 func (fcp *FireCrackerProcess) cleanUp() {
 	//clean up firecracker and the jailer - lets tear everything down...
-
-	os.Remove(fcp.fcConfig.SocketPath)
-	os.RemoveAll(filepath.Join(fcp.chrootPath, "dev"))
-
+	os.RemoveAll(fcp.chrootPath)
+	// os.Remove(fcp.fcConfig.SocketPath)
+	// os.RemoveAll(filepath.Join(fcp.chrootPath, "dev"))
+	fcp.isStarted = false
+	fcp.isRestarting = false
+	fcp.isShuttingDown = false
+	fcp.Status = UNKOWN_STATUS
+	if fcp.stateChan != nil {
+		close(fcp.stateChan)
+		fcp.stateChan = make(chan string)
+	} else {
+		fcp.stateChan = make(chan string)
+	}
+	if fcp.procExitWaitChan == nil {
+		fcp.procExitWaitChan = make(chan error)
+	}
 }
 
 func (fcp *FireCrackerProcess) pollStatus() error {
@@ -270,7 +306,7 @@ func (fcp *FireCrackerProcess) pollStatus() error {
 	}
 	fcp.statusResp = res
 	status := *(fcp.statusResp.Payload.State)
-	//fcp.logger.Warnf("Status %s", status)
+	fcp.logger.Warnf("Status %s", status)
 	if fcp.Status == UNKOWN_STATUS {
 		fcp.Status = status
 	} else {
@@ -281,18 +317,16 @@ func (fcp *FireCrackerProcess) pollStatus() error {
 
 func (fcp *FireCrackerProcess) Start() error {
 
-	if fcp.jailerProc != nil && fcp.jailerProc.Proc != nil && fcp.jailerProc.Proc.ProcessState != nil && fcp.jailerProc.Proc.ProcessState.Exited() {
-		fcp.cleanUp()
+	//if the vmm is already started we dont need to do anything - but lets also check its not currently exited either
+
+	if !fcp.jailerProcRunning || fcp.jailerProc == nil {
+		//fcp.cleanUp()
 		err := fcp.startFirecrackerProcess()
 		if err != nil {
 			return err
 		}
-	} else if fcp.jailerProc == nil {
-		fcp.cleanUp()
-		err := fcp.startFirecrackerProcess()
-		if err != nil {
-			return err
-		}
+	} else if fcp.isStarted {
+		return errors.New("VMM already started")
 	}
 	if fcp.isOsv {
 		return fcp.startOsv()
@@ -301,6 +335,7 @@ func (fcp *FireCrackerProcess) Start() error {
 	log.Println("Firecracker started for", fcp.id, "KERNEL:", fcp.kernelPath, "IMAGE:", fcp.imagePath, "BOOT:", fcp.cmd)
 	//now we need to connect to the relevant socket...
 	fcp.ctx, fcp.cancelFunc = context.WithCancel(context.Background())
+	log.Println("CTX:", fcp.ctx.Err())
 
 	driveList := make([]models.Drive, len(fcp.imageList))
 
@@ -311,7 +346,8 @@ func (fcp *FireCrackerProcess) Start() error {
 		}
 		destPath := filepath.Join(fcp.chrootPath, driveName+".img")
 		if !vutils.Files.PathExists(destPath) {
-			err := qemuConvertImgRaw(img, destPath)
+			//make the link
+			err := os.Link(img, destPath)
 			if err != nil {
 				return err
 			}
@@ -404,16 +440,20 @@ func (fcp *FireCrackerProcess) Start() error {
 
 	fcp.machine = m
 
-	err = chown(fcp.chrootPath)
-	if err != nil {
-		return err
-	}
+	// err = chown(fcp.chrootPath)
+	// if err != nil {
+	// 	return err
+	// }
 
 	if err := m.Start(fcp.ctx); err != nil {
+		fcp.isStarted = false
 		return err
 	}
-
+	fcp.isStarted = true
+	fcp.Status = UNKOWN_STATUS
 	fcp.beginPollingLoop() //while we wait we will begin polling for status...
+
+	log.Println("Started machine")
 
 	return nil
 
@@ -483,9 +523,11 @@ func (fcp *FireCrackerProcess) startOsv() error {
 	fcp.machine = m
 
 	if err := m.Start(fcp.ctx); err != nil {
+		fcp.isStarted = false
 		return err
 	}
-
+	fcp.isStarted = true
+	fcp.Status = UNKOWN_STATUS
 	fcp.beginPollingLoop() //while we wait we will begin polling for status...
 
 	return nil
@@ -520,44 +562,79 @@ func (fcp *FireCrackerProcess) terminateInitialise() error {
 }
 
 func (fcp *FireCrackerProcess) Stop() error {
-	fcp.isShuttingDown = true
-	if fcp.jailerProc != nil && fcp.jailerProc.Proc != nil && fcp.jailerProc.Proc.ProcessState != nil && !fcp.jailerProc.Proc.ProcessState.Exited() {
-		fcp.jailerProc.Proc.Process.Kill()
+	fcp.isStopping = true
+	if fcp.jailerProc != nil && fcp.jailerProc.Proc != nil && fcp.jailerProc.Proc.Process != nil {
+		fmt.Println("direct kill")
+		fcp.jailerProc.Proc.Process.Signal(syscall.SIGKILL)
+		fcp.jailerProcRunning = false
+		fmt.Println("signalled")
 	}
-	fcp.cleanUp()
-	fcp.isShuttingDown = false
+	if fcp.isShuttingDown {
+		fcp.cleanUp()
+		fmt.Println("cleaned up")
+		go func() {
+			fmt.Println("write chan")
+			fcp.killChan <- nil
+			fmt.Println("chan written")
+		}()
+	} else {
+		fmt.Println("skipping chan")
+		fcp.cleanUp()
+		fmt.Println("cleaned up")
+	}
+	fcp.isStopping = false
 	// a forced termination
 	return nil
 
 }
 
 func (fcp *FireCrackerProcess) Shutdown() error {
-	fcp.isShuttingDown = true
-
-	// a graceful shutdown..
-	e := fcp.machine.Shutdown(fcp.ctx)
-	fcp.isShuttingDown = false
-	return e
+	return fcp.ShutdownTimeout(5 * time.Second)
 }
 
 func (fcp *FireCrackerProcess) ShutdownTimeout(timeout time.Duration) error {
+	if !fcp.isStarted {
+		fmt.Println("running direct kill")
+		return fcp.Stop()
+	} else if fcp.isShuttingDown {
+		return errors.New("Already shutting down")
+	}
 	fcp.isShuttingDown = true
 	// a graceful shutdown..
-	ctx, cancel := context.WithTimeout(fcp.ctx, timeout)
+	// if fcp.ctx == nil {
+	// 	fmt.Println("Current Context is null")
+	// 	return errors.New("CTX IS NIL")
+	// }
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	e := fcp.machine.Shutdown(ctx)
 	if e != nil {
 		return e
 	}
-	select {
-	case <-time.After(1 * time.Second):
-		fmt.Println("overslept")
-	case <-ctx.Done():
-		fmt.Println(ctx.Err()) // prints "context deadline exceeded"
-	}
+	doneChan := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-time.After(1 * time.Second):
+				fmt.Println("overslept")
+			case <-ctx.Done():
+				fmt.Println(ctx.Err()) // prints "context deadline exceeded"
+				fcp.isShuttingDown = false
+				fcp.Stop()
+				doneChan <- true
+				return
+			case <-fcp.killChan:
+				fcp.isShuttingDown = false
+				doneChan <- true
+				return
+			}
+		}
+	}()
+	_ = <-doneChan
 	fcp.isShuttingDown = false
-	return fcp.Wait()
+	return nil //fcp.Wait()
 
 }
 
@@ -566,33 +643,61 @@ func (fcp *FireCrackerProcess) Restart() error {
 	fcp.isRestarting = true
 
 	// a graceful shutdown..
-	e := fcp.machine.Shutdown(fcp.ctx)
+	e := fcp.Shutdown()
 	if e != nil {
 		return e
 	}
-	go func() {
-		e := fcp.jailerProc.Wait()
-		if e != nil {
-			return
-		}
-		e = fcp.machine.Start(fcp.ctx)
-		fcp.isRestarting = false
-	}()
-	return e
+	// go func() {
+	// 	e := fcp.jailerProc.Wait()
+	// 	if e != nil {
+	// 		return
+	// 	}
+	// 	e = fcp.machine.Start(fcp.ctx)
+	// }()
+	fcp.isRestarting = false
+	return fcp.Start()
 
 }
 
-func (fcp *FireCrackerProcess) RestartTimeout() error {
+func (fcp *FireCrackerProcess) RestartTimeout(timeout time.Duration) error {
 
-	// a graceful restart
-	return nil
+	fcp.isRestarting = true
+
+	// a graceful shutdown..
+	e := fcp.ShutdownTimeout(timeout)
+	if e != nil {
+		return e
+	}
+	// go func() {
+	// 	e := fcp.jailerProc.Wait()
+	// 	if e != nil {
+	// 		return
+	// 	}
+	// 	e = fcp.machine.Start(fcp.ctx)
+	// }()
+	fcp.isRestarting = false
+	return fcp.Start()
 
 }
 
 func (fcp *FireCrackerProcess) Reset() error {
 
-	// forced reset
-	return nil
+	fcp.isRestarting = true
+
+	// a graceful shutdown..
+	e := fcp.Stop()
+	if e != nil {
+		return e
+	}
+	// go func() {
+	// 	e := fcp.jailerProc.Wait()
+	// 	if e != nil {
+	// 		return
+	// 	}
+	// 	e = fcp.machine.Start(fcp.ctx)
+	// }()
+	fcp.isRestarting = false
+	return fcp.Start()
 
 }
 

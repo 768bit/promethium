@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/768bit/firecracker-go-sdk v0.15.2
 	github.com/768bit/vpkg v0.2.7
-	github.com/768bit/vutils v0.1.1
+	github.com/768bit/vutils v0.1.2
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/btcsuite/winsvc v1.0.0 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.7 // indirect
 	github.com/milosgajdos83/tenus v0.0.0-20190415114537-1f3ed00ae7d8
 	github.com/mistifyio/go-zfs v2.1.1+incompatible
-	github.com/ogier/pflag v0.0.1 // indirect
+	github.com/ogier/pflag v0.0.1
 	github.com/palantir/stacktrace v0.0.0-20161112013806-78658fd2d177
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -48,6 +48,6 @@ require (
 	gopkg.in/hlandau/configurable.v1 v1.0.1 // indirect
 	gopkg.in/hlandau/easyconfig.v1 v1.0.17
 	gopkg.in/hlandau/service.v2 v2.0.16
-	gopkg.in/hlandau/svcutils.v1 v1.0.10 // indirect
+	gopkg.in/hlandau/svcutils.v1 v1.0.10
 	gopkg.in/yaml.v2 v2.2.7
 )

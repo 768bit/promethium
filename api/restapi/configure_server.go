@@ -66,8 +66,8 @@ func configureAPI(api *operations.ServerAPI) http.Handler {
 			return middleware.NotImplemented("operation storage.GetStorageStorageIDKernels has not yet been implemented")
 		})
 	}
-	if api.VmsCreateImageHandler == nil {
-		api.VmsCreateImageHandler = vms.CreateImageHandlerFunc(func(params vms.CreateImageParams) middleware.Responder {
+	if api.ImagesCreateImageHandler == nil {
+		api.ImagesCreateImageHandler = images.CreateImageHandlerFunc(func(params images.CreateImageParams) middleware.Responder {
 			return middleware.NotImplemented("operation vms.CreateImage has not yet been implemented")
 		})
 	}
@@ -158,6 +158,93 @@ func configureAPI(api *operations.ServerAPI) http.Handler {
 			return &vms.StartVMBadRequest{}
 		}
 		return &vms.StartVMOK{}
+	})
+
+	api.VmsStopVMHandler = vms.StopVMHandlerFunc(func(params vms.StopVMParams) middleware.Responder {
+		vmm, err := vmmManager.Get(params.VMID)
+		if err != nil {
+			return &vms.StopVMNotFound{}
+		}
+		err = vmm.Stop()
+		if err != nil {
+			println(err.Error())
+			return &vms.StopVMBadRequest{}
+		}
+		return &vms.StopVMOK{}
+	})
+
+	api.VmsShutdownVMHandler = vms.ShutdownVMHandlerFunc(func(params vms.ShutdownVMParams) middleware.Responder {
+		vmm, err := vmmManager.Get(params.VMID)
+		if err != nil {
+			return &vms.ShutdownVMNotFound{}
+		}
+		err = vmm.Shutdown()
+		if err != nil {
+			println(err.Error())
+			return &vms.ShutdownVMBadRequest{}
+		}
+		return &vms.ShutdownVMOK{}
+	})
+
+	api.VmsRestartVMHandler = vms.RestartVMHandlerFunc(func(params vms.RestartVMParams) middleware.Responder {
+		vmm, err := vmmManager.Get(params.VMID)
+		if err != nil {
+			return &vms.RestartVMNotFound{}
+		}
+		err = vmm.Restart()
+		if err != nil {
+			println(err.Error())
+			return &vms.RestartVMBadRequest{}
+		}
+		return &vms.RestartVMOK{}
+	})
+
+	api.VmsResetVMHandler = vms.ResetVMHandlerFunc(func(params vms.ResetVMParams) middleware.Responder {
+		vmm, err := vmmManager.Get(params.VMID)
+		if err != nil {
+			return &vms.ResetVMNotFound{}
+		}
+		err = vmm.Reset()
+		if err != nil {
+			println(err.Error())
+			return &vms.ResetVMBadRequest{}
+		}
+		return &vms.ResetVMOK{}
+	})
+
+	api.ImagesPullImageHandler = images.PullImageHandlerFunc(func(params images.PullImageParams) middleware.Responder {
+		return &images.PullImageOK{}
+	})
+
+	api.ImagesPushImageHandler = images.PushImageHandlerFunc(func(params images.PushImageParams) middleware.Responder {
+		//will receive a payload which contains a file for upload.. this may also be a build context...
+
+		if drv, err := vmmManager.Storage().GetStorage(*params.TargetStorage); err != nil {
+			e := err.Error()
+			errPayload := images.NewPushImageDefault(500)
+			errPayload.SetPayload(&models.Error{
+				Code:    500,
+				Message: &e,
+			})
+			return errPayload
+		} else {
+
+			//lets figure out what we need to do with image
+
+			err = drv.ImportImageFromRdr(params.InFileBlob)
+			if err != nil {
+				e := err.Error()
+				errPayload := images.NewPushImageDefault(500)
+				errPayload.SetPayload(&models.Error{
+					Code:    500,
+					Message: &e,
+				})
+				return errPayload
+			}
+
+		}
+
+		return &images.PushImageOK{}
 	})
 
 	if api.NetworkingGetNetworkHandler == nil {
@@ -269,6 +356,9 @@ func configureAPI(api *operations.ServerAPI) http.Handler {
 // The TLS configuration before HTTPS server starts.
 func configureTLS(tlsConfig *tls.Config) {
 	// Make all necessary changes to the TLS configuration here.
+
+	//if the config set this then we
+
 }
 
 // As soon as server is initialized but not run yet, this function will be called.

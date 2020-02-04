@@ -27,41 +27,6 @@ type Client struct {
 }
 
 /*
-CreateImage creates a new image
-
-Create a new Image
-*/
-func (a *Client) CreateImage(params *CreateImageParams) (*CreateImageOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewCreateImageParams()
-	}
-
-	result, err := a.transport.Submit(&runtime.ClientOperation{
-		ID:                 "createImage",
-		Method:             "POST",
-		PathPattern:        "/images",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &CreateImageReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	})
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*CreateImageOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*CreateImageDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
 CreateVM creates a VM instance
 
 Create an instance of VM
@@ -658,6 +623,114 @@ func (a *Client) GetVMVolumeList(params *GetVMVolumeListParams) (*GetVMVolumeLis
 	// unexpected success response
 	unexpectedSuccess := result.(*GetVMVolumeListDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ResetVM resets a VM instance
+
+Forcefully Reset an instance of VM
+*/
+func (a *Client) ResetVM(params *ResetVMParams) (*ResetVMOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewResetVMParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "resetVM",
+		Method:             "GET",
+		PathPattern:        "/vms/{vmID}/reset",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ResetVMReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ResetVMOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	// safeguard: normally, absent a default response, unknown success responses return an error above: so this is a codegen issue
+	msg := fmt.Sprintf("unexpected success response for resetVM: API contract not enforced by server. Client expected to get an error, but got: %T", result)
+	panic(msg)
+}
+
+/*
+RestartVM restarts a VM instance
+
+Gracefully Restart an instance of VM
+*/
+func (a *Client) RestartVM(params *RestartVMParams) (*RestartVMOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewRestartVMParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "restartVM",
+		Method:             "GET",
+		PathPattern:        "/vms/{vmID}/restart",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &RestartVMReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*RestartVMOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	// safeguard: normally, absent a default response, unknown success responses return an error above: so this is a codegen issue
+	msg := fmt.Sprintf("unexpected success response for restartVM: API contract not enforced by server. Client expected to get an error, but got: %T", result)
+	panic(msg)
+}
+
+/*
+ShutdownVM shutdowns a VM instance
+
+Gracefully Shutdown an instance of VM
+*/
+func (a *Client) ShutdownVM(params *ShutdownVMParams) (*ShutdownVMOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewShutdownVMParams()
+	}
+
+	result, err := a.transport.Submit(&runtime.ClientOperation{
+		ID:                 "shutdownVM",
+		Method:             "GET",
+		PathPattern:        "/vms/{vmID}/shutdown",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ShutdownVMReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	})
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ShutdownVMOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	// safeguard: normally, absent a default response, unknown success responses return an error above: so this is a codegen issue
+	msg := fmt.Sprintf("unexpected success response for shutdownVM: API contract not enforced by server. Client expected to get an error, but got: %T", result)
+	panic(msg)
 }
 
 /*

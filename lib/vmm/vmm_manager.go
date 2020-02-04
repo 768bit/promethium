@@ -2,6 +2,7 @@ package vmm
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/768bit/promethium/api/models"
 	"github.com/768bit/promethium/lib/assets"
 	"github.com/768bit/promethium/lib/config"
+	"github.com/768bit/promethium/lib/images"
 	"github.com/768bit/promethium/lib/networking"
 	"github.com/768bit/promethium/lib/storage"
 	"github.com/768bit/vutils"
@@ -48,6 +50,8 @@ type VmmManager struct {
 	instanceConfigRootPath string
 
 	fcInstanceRootPath string
+	storageRootPath    string
+	cacheRootPath      string
 
 	instances        map[string]*Vmm
 	clusterInstances map[string]map[string]*Vmm
@@ -57,23 +61,46 @@ type VmmManager struct {
 	runGroup  sync.WaitGroup
 	stopGroup sync.WaitGroup
 	killGroup sync.WaitGroup
+	uid       int
+	gid       int
 }
 
 func (vmmMgr *VmmManager) init() error {
+
+	uid, err := config.GetUserId(vmmMgr.config.User)
+	if err != nil {
+		return err
+	}
+	gid, err := config.GetGroupId(vmmMgr.config.Group)
+	if err != nil {
+		return err
+	}
+
+	vmmMgr.uid = uid
+	vmmMgr.gid = gid
+
+	images.StartQemuNbd(uid, gid)
+
 	if err := vmmMgr.createFolders(); err != nil {
 		return err
 	}
+
 	if err := vmmMgr.setupNetworking(); err != nil {
 		return err
 	}
-	if vmmMgr.config.IsNewConfig() {
-		println("Is new config")
-		err := storage.InitLocalFileStorage(vmmMgr.config.Storage[0].ID, vmmMgr.config.Storage[0].Config)
-		if err != nil {
-			println(err.Error())
-		}
-	}
-	if storageMgr, err := storage.NewStorageManager(vmmMgr.appRootPath, vmmMgr.config.Storage); err != nil {
+	// if vmmMgr.config.IsNewConfig() {
+	// 	println("Is new config")
+	// 	err := storage.InitLocalFileStorage(vmmMgr.config.Storage[0].ID, vmmMgr.config.Storage[0].Config)
+	// 	if err != nil {
+	// 		println(err.Error())
+	// 	}
+	// }
+
+	return nil
+}
+
+func (vmmMgr *VmmManager) Start() error {
+	if storageMgr, err := storage.NewStorageManager(vmmMgr.appRootPath, vmmMgr.config.Storage, vmmMgr.uid, vmmMgr.gid); err != nil {
 		return err
 	} else {
 		vmmMgr.storageManager = storageMgr
@@ -81,6 +108,7 @@ func (vmmMgr *VmmManager) init() error {
 	if err := vmmMgr.scanInstanceConfigs(); err != nil {
 		return err
 	}
+	log.Printf("VmmManager Started...")
 	return nil
 }
 
@@ -107,6 +135,7 @@ func (vmmMgr *VmmManager) scanInstances(configMap map[string]bool) error {
 	clusterInstanceDirs := []string{}
 	orphanedInstanceDirs := []string{}
 	err := filepath.Walk(vmmMgr.fcInstanceRootPath, func(path string, f os.FileInfo, _ error) error {
+
 		if f.IsDir() {
 
 			//check if this directory is valid...
@@ -137,6 +166,8 @@ func (vmmMgr *VmmManager) scanInstances(configMap map[string]bool) error {
 
 func (vmmMgr *VmmManager) createFolders() error {
 	log.Printf("Creating VmmManager Folder Structure...")
+	vmmMgr.cacheRootPath = filepath.Join(vmmMgr.appRootPath, "cache")
+	vmmMgr.storageRootPath = filepath.Join(vmmMgr.appRootPath, "storage")
 	vmmMgr.instanceConfigRootPath = filepath.Join(vmmMgr.appRootPath, "instances")
 	vmmMgr.fcInstanceRootPath = filepath.Join(vmmMgr.appRootPath, "firecracker")
 	binPath := filepath.Join(vmmMgr.appRootPath, "bin")
@@ -144,7 +175,7 @@ func (vmmMgr *VmmManager) createFolders() error {
 	fcBinary, err := assets.FireCrackerAssets.Open("firecracker")
 	if err == nil {
 		of, err := os.Create(filepath.Join(binPath, "firecracker"))
-		of.Chmod(0740)
+		of.Chmod(0700)
 		if err != nil {
 			println(err.Error())
 		} else {
@@ -156,7 +187,7 @@ func (vmmMgr *VmmManager) createFolders() error {
 	jlrBinary, err := assets.FireCrackerAssets.Open("jailer")
 	if err == nil {
 		of, err := os.Create(filepath.Join(binPath, "jailer"))
-		of.Chmod(0740)
+		of.Chmod(0700)
 		if err != nil {
 			println(err.Error())
 		} else {
@@ -167,9 +198,22 @@ func (vmmMgr *VmmManager) createFolders() error {
 	}
 	if err := vutils.Files.CreateDirIfNotExist(vmmMgr.instanceConfigRootPath); err != nil {
 		return err
+	} else if err := vutils.Files.CreateDirIfNotExist(vmmMgr.storageRootPath); err != nil {
+		return err
+	} else if err := vutils.Files.CreateDirIfNotExist(vmmMgr.cacheRootPath); err != nil {
+		return err
+	} else if err := vutils.Files.CreateDirIfNotExist(filepath.Join(vmmMgr.cacheRootPath, "images")); err != nil {
+		return err
+	} else if err := vutils.Files.CreateDirIfNotExist(vmmMgr.fcInstanceRootPath); err != nil {
+		return err
 	} else {
-		return vutils.Files.CreateDirIfNotExist(vmmMgr.fcInstanceRootPath)
+		//now chown everything!
+		// err = config.DoChown(vmmMgr.appRootPath, vmmMgr.uid, vmmMgr.gid, true)
+		// if err != nil {
+		// 	return err
+		// }
 	}
+	return nil
 }
 
 func (vmmMgr *VmmManager) setupNetworking() error {
@@ -180,6 +224,10 @@ func (vmmMgr *VmmManager) setupNetworking() error {
 	}
 	vmmMgr.networks = netMgr
 	return err
+}
+
+func (vmmMgr *VmmManager) GetConfig() *config.PromethiumDaemonConfig {
+	return vmmMgr.config
 }
 
 func (vmmMgr *VmmManager) Wait() error {
@@ -204,21 +252,29 @@ func (vmmMgr *VmmManager) WaitKill() error {
 	vmmMgr.killGroup = sync.WaitGroup{}
 	for _, vmm := range vmmMgr.instances {
 		vmmMgr.killGroup.Add(1)
-		go func() {
-			vmm.WaitKill(30 * time.Second)
+		go func(inVmm *Vmm) {
+			fmt.Printf("Killing VMM With Timeout: %s\n", inVmm.ID())
+			err := inVmm.WaitKill(30 * time.Second)
+			if err != nil {
+				fmt.Printf("Error waiting on shutdown: %s\n", err.Error())
+			} else {
+				fmt.Printf("VMM Killed With Timeout: %s\n", inVmm.ID())
+			}
+
 			vmmMgr.killGroup.Done()
-		}()
+		}(vmm)
 	}
 	for _, vmmColl := range vmmMgr.clusterInstances {
 		for _, vmm := range vmmColl {
 			vmmMgr.killGroup.Add(1)
-			go func() {
-				vmm.WaitKill(30 * time.Second)
+			go func(inVmm *Vmm) {
+				inVmm.WaitKill(30 * time.Second)
 				vmmMgr.killGroup.Done()
-			}()
+			}(vmm)
 		}
 	}
 	vmmMgr.killGroup.Wait()
+	log.Println("Waiting on shutdown completed")
 	return nil
 }
 

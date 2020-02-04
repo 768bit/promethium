@@ -79,22 +79,25 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 		println(err.Error())
 		return nil, err
 	}
+	defer pkgFile.Close()
 
-	rootDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
+	vmmConfig.Type = config.VmmType(img.GetType())
+
+	rootDiskPath, err := tstr.WriteRootDisk(vmmId, ds, int64(size), false, true)
 	if err != nil {
 
 		println(err.Error())
 		return nil, err
 	}
 
-	rootDisk, err := common.NewStorageDisk(vmmId, name, rootDiskPath, tstr)
+	rootDisk, err := common.NewStorageDisk(vmmId, "root.img", rootDiskPath, tstr)
 	if err != nil {
 
 		println(err.Error())
 		return nil, err
 	}
 	vmmConfig.Disks = []*config.VmmDiskConfig{
-		rootDisk.ToDiskConfig(),
+		rootDisk.ToDiskConfig(true),
 	}
 
 	//does the image have a kernel? have we selected a different one?
@@ -103,18 +106,19 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 		fmt.Println("Kernel not specified for VM")
 	} else if !img.HasKernel() {
 		//we dont have a kernel but be can seek for one... one was specified...
-		kimg, err := mgr.Storage().GetImageByID(image)
+		println("Seeking Kernel with ID: " + kernelImage)
+		kimg, err := mgr.Storage().GetImageByID(kernelImage)
 		if err != nil {
 
 			println(err.Error())
-			kimg, err = mgr.Storage().GetImage(image)
+			kimg, err = mgr.Storage().GetImage(kernelImage)
 			if err != nil {
 
 				println(err.Error())
 				return nil, err
 			}
 		}
-		pkgFile, ds, err := kimg.GetKernelReader()
+		kernFile, ds, err := kimg.GetKernelReader()
 		if err != nil {
 			if pkgFile != nil {
 				pkgFile.Close()
@@ -122,7 +126,8 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 			println(err.Error())
 			return nil, err
 		}
-		kernelDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
+		defer kernFile.Close()
+		kernelDiskPath, err := tstr.WriteKernel(vmmId, ds)
 		if err != nil {
 
 			println(err.Error())
@@ -132,7 +137,7 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 		vmmConfig.Kernel = kernelImg.GetURI()
 	} else {
 		//the main image contains a kernel
-		pkgFile, ds, err := img.GetKernelReader()
+		kernFile, ds, err := img.GetKernelReader()
 		if err != nil {
 			if pkgFile != nil {
 				pkgFile.Close()
@@ -140,7 +145,8 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 			println(err.Error())
 			return nil, err
 		}
-		kernelDiskPath, err := tstr.WriteRootDisk(img.GetID(), ds, int64(size), false, true)
+		defer kernFile.Close()
+		kernelDiskPath, err := tstr.WriteKernel(vmmId, ds)
 		if err != nil {
 
 			println(err.Error())
@@ -149,6 +155,8 @@ func (mgr *VmmManager) NewVmmFromImage(name string, vcpus int64, mem int64, imag
 		kernelImg := common.NewKernel(vmmId, kernelDiskPath, tstr)
 		vmmConfig.Kernel = kernelImg.GetURI()
 	}
+
+	vmmConfig.BootCmd = img.GetBootParams()
 
 	//we have an image now we need to instantiate it in the storage target (and ther kernel)
 	// disk, kernel, err := mgr.Storage().MakeNewVmDiskAndKernelFromImage(vmmId, targetStorage, img, size)
@@ -188,7 +196,7 @@ func (mgr *VmmManager) LoadVmm(vmmConfigPath string) (*Vmm, error) {
 	if err := vutils.Config.LoadConfigFromFile(vmmConfigPath, vmmConfig); err != nil {
 		return nil, err
 	} else if vmmConfig == nil {
-		return nil, errors.New("")
+		return nil, errors.New("Config is nil")
 	}
 
 	vmm := &Vmm{
@@ -265,7 +273,7 @@ func (vmm *Vmm) init(cfg *config.VmmConfig) (*Vmm, error) {
 		//  "", )
 		return vmm, nil
 	default:
-		return vmm, errors.New("")
+		return vmm, errors.New("Unknown type: " + string(cfg.Type))
 	}
 
 }
@@ -287,6 +295,58 @@ func (vmm *Vmm) Start() error {
 		return errors.New("Unable to start as instance isnt setup")
 	} else {
 		err := vmm.instance.Start()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func (vmm *Vmm) Stop() error {
+	if vmm.instance == nil {
+		return errors.New("Unable to stop as instance isnt setup")
+	} else {
+		err := vmm.instance.Stop()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func (vmm *Vmm) Shutdown() error {
+	if vmm.instance == nil {
+		return errors.New("Unable to shutdown as instance isnt setup")
+	} else {
+		err := vmm.instance.Shutdown()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func (vmm *Vmm) Restart() error {
+	if vmm.instance == nil {
+		return errors.New("Unable to restart as instance isnt setup")
+	} else {
+		err := vmm.instance.Restart()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+}
+
+func (vmm *Vmm) Reset() error {
+	if vmm.instance == nil {
+		return errors.New("Unable to reset as instance isnt setup")
+	} else {
+		err := vmm.instance.Reset()
 		if err != nil {
 			return err
 		}

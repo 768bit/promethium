@@ -183,6 +183,9 @@ func (zfs *ZfsStorage) WriteAdditionalDisk(id string, index int, source io.Reade
 func (zfs *ZfsStorage) WriteCloudInit(id string, source io.Reader) (string, error) {
 	return "", nil
 }
+func (zfs *ZfsStorage) ImportImageFromRdr(stream io.ReadCloser) error {
+	return nil
+}
 
 func SetZfsRootPath(newRootPath string) {
 	ZFS_ROOT_PATH = newRootPath

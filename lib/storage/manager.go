@@ -18,28 +18,33 @@ import (
 )
 
 type StorageManager struct {
+	rootPath        string
 	targets         map[string]common.StorageDriver
 	imagesCachePath string
 	imagesCache     map[string]*images.ImageCacheFile
 	imagesHashMap   map[string]string
 }
 
-func NewStorageManager(promethiumRootPath string, configs []*config.StorageConfig) (*StorageManager, error) {
+func NewStorageManager(promethiumRootPath string, configs []*config.StorageConfig, uid int, gid int) (*StorageManager, error) {
 	sm := &StorageManager{
+		rootPath:        promethiumRootPath,
 		targets:         map[string]common.StorageDriver{},
 		imagesCachePath: filepath.Join(promethiumRootPath, "cache", "images"),
 		imagesCache:     nil,
 		imagesHashMap:   map[string]string{},
 	}
-	return sm.init(configs)
+	return sm.init(configs, uid, gid)
 }
 
-func (sm *StorageManager) init(configs []*config.StorageConfig) (*StorageManager, error) {
+func (sm *StorageManager) init(configs []*config.StorageConfig, uid int, gid int) (*StorageManager, error) {
 	//using the configs passed in we need to load the storage drivers with the supplied config...
 
 	vutils.Files.CreateDirIfNotExist(sm.imagesCachePath)
 
 	sm.loadImagesCache()
+	// cacheRoot := filepath.Join(sm.rootPath, "cache")
+	// config.DoChmod(cacheRoot, 0600, true)
+	// config.DoChown(cacheRoot, uid, gid, true)
 
 	for _, config := range configs {
 		println("Loading Storage Driver: " + config.Driver + " with ID: " + config.ID)
