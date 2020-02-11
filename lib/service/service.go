@@ -5,7 +5,6 @@ package service // import "gopkg.in/hlandau/service.v2"
 import (
 	"expvar"
 	"fmt"
-	"gopkg.in/hlandau/easyconfig.v1/cflag"
 "github.com/768bit/promethium/lib/service/gsptcall"
 	"gopkg.in/hlandau/svcutils.v1/exepath"
 	"io"
@@ -22,9 +21,9 @@ import (
 // Flags
 
 var (
-	fg                  = cflag.NewGroup(nil, "service")
-	cpuProfileFlag      = cflag.String(fg, "cpuprofile", "", "Write CPU profile to file")
-	debugServerAddrFlag = cflag.String(fg, "debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
+	//fg                  = cflag.NewGroup(nil, "service")
+	cpuProfileFlag      = ""//cflag.String(fg, "cpuprofile", "", "Write CPU profile to file")
+	debugServerAddrFlag = ""//cflag.String(fg, "debugserveraddr", "", "Address for debug server to listen on (do not specify a public address) (default: disabled)")
 )
 
 type nullWriter struct{}
@@ -162,8 +161,8 @@ func (info *Info) maine() error {
 	}
 
 	// profiling
-	if cpuProfileFlag.Value() != "" {
-		f, err := os.Create(cpuProfileFlag.Value())
+	if cpuProfileFlag != "" {
+		f, err := os.Create(cpuProfileFlag)
 		if err != nil {
 			return err
 		}
@@ -178,9 +177,9 @@ func (info *Info) maine() error {
 }
 
 func (info *Info) commonPre() error {
-	if debugServerAddrFlag != nil && debugServerAddrFlag.Value() != "" {
+	if debugServerAddrFlag != "" {
 		go func() {
-			err := http.ListenAndServe(debugServerAddrFlag.Value(), nil)
+			err := http.ListenAndServe(debugServerAddrFlag, nil)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Couldn't start debug server: %+v\n", err)
 			}

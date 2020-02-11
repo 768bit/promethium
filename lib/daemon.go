@@ -15,7 +15,6 @@ import (
 	"github.com/go-openapi/loads"
 	"github.com/gorilla/mux"
 	"github.com/jessevdk/go-flags"
-	"gopkg.in/hlandau/easyconfig.v1"
 )
 
 type PromethiumDaemonStatus uint8
@@ -114,7 +113,7 @@ func (pd *PromethiumDaemon) setupDaemonise() {
 
 	//start the daemon - which will start the api...
 
-	easyconfig.ParseFatal(nil, nil)
+	//easyconfig.ParseFatal(nil, nil)
 
 	service.Main(&service.Info{
 		Title:       "Promethium Server Daemon",

@@ -149,7 +149,7 @@ func (fcp *FireCrackerProcess) startFirecrackerProcess() error {
 		"--exec-file", fcp.firecrackerBinaryPath,
 		"--uid", strconv.Itoa(os.Getuid()),
 		"--gid", strconv.Itoa(os.Getgid()),
-		"--chroot-base-dir", ROOT_PATH).BindToStdoutAndStdErr() // //.CaptureStdoutAndStdErr(false, false)
+		"--chroot-base-dir", ROOT_PATH) // //.CaptureStdoutAndStdErr(false, false)
 	fcp.jailerProc.Proc.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true,
 	}
@@ -440,10 +440,10 @@ func (fcp *FireCrackerProcess) Start() error {
 
 	fcp.machine = m
 
-	// err = chown(fcp.chrootPath)
-	// if err != nil {
-	// 	return err
-	// }
+	err = chown(fcp.chrootPath)
+	if err != nil {
+		return err
+	}
 
 	if err := m.Start(fcp.ctx); err != nil {
 		fcp.isStarted = false

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/btcsuite/winsvc/mgr"
 	"github.com/btcsuite/winsvc/svc"
-	"gopkg.in/hlandau/easyconfig.v1/cflag"
 	"gopkg.in/hlandau/svcutils.v1/exepath"
 	"os"
 	"time"
@@ -15,7 +14,7 @@ import (
 var EmptyChrootPath = ""
 
 var (
-	serviceFlag = cflag.String(fg, "do", "", "service command (one of: start, stop, install, remove)")
+	serviceFlag = ""
 )
 
 var errNotSupported = fmt.Errorf("not supported")
@@ -263,7 +262,7 @@ func (info *Info) runAsService() error {
 }
 
 func (info *Info) serviceMain() error {
-	switch serviceFlag.Value() {
+	switch serviceFlag {
 	case "install":
 		return info.installService()
 	case "remove":
