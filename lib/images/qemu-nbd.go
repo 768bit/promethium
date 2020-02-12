@@ -123,6 +123,17 @@ type qemuNbd struct {
 	devMap  map[string]*QemuImage
 }
 
+func (qn *qemuNbd) checkDeviceUsed(dev string) bool {
+	fd, err := os.OpenFile(dev, os.O_EXCL, os.ModeExclusive)
+	if err != nil {
+		println(err.Error())
+		return true
+	}
+	println(dev, "unused")
+	fd.Close()
+	return false
+}
+
 var NoQemuNbdDeviceAvailable error = errors.New("No Free Qemu NBD Devices are available")
 
 func (qn *qemuNbd) getFirstDev() string {
@@ -134,6 +145,10 @@ func (qn *qemuNbd) getFirstDev() string {
 	}
 
 	return ""
+}
+
+func (qn *qemuNbd) Dispose() {
+	qn.disconnectAllDevices()
 }
 
 func (qn *qemuNbd) connect(image *QemuImage) error {
@@ -167,12 +182,30 @@ func (qn *qemuNbd) disconnect(image *QemuImage) error {
 	return err
 }
 
+func (qn *qemuNbd) disconnectAllDevices() {
+
+	//loop through current devices and disconnect - forcfully
+
+	for _, img := range qn.devMap {
+		if err := qn.disconnect(img); err != nil {
+			println(err.Error())
+		}
+	}
+
+}
+
 func (qn *qemuNbd) init() *qemuNbd {
 	dl, err := getNbdDeviceList()
 	if dl != nil && err == nil && len(dl) > 0 {
 		qn.devList = dl
 	} else {
 		qn.devList = []string{}
+	}
+	tlist := []string{}
+	for _, dev := range qn.devList {
+		if !qn.checkDeviceUsed(dev) {
+			tlist = append(tlist, dev)
+		}
 	}
 	qn.devMap = map[string]*QemuImage{}
 	return qn

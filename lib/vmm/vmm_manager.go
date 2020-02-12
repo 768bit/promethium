@@ -244,7 +244,7 @@ func (vmmMgr *VmmManager) Kill() error {
 			vmm.Kill()
 		}
 	}
-	return nil
+	return vmmMgr.cleanupForExit()
 }
 
 func (vmmMgr *VmmManager) WaitKill() error {
@@ -275,6 +275,12 @@ func (vmmMgr *VmmManager) WaitKill() error {
 	}
 	vmmMgr.killGroup.Wait()
 	log.Println("Waiting on shutdown completed")
+	return vmmMgr.cleanupForExit()
+}
+
+func (vmmMgr *VmmManager) cleanupForExit() error {
+	vmmMgr.storageManager.Dispose()
+	log.Println("Cleanup complete")
 	return nil
 }
 

@@ -5,16 +5,16 @@ go 1.12
 require (
 	github.com/768bit/firecracker-go-sdk v0.15.2
 	github.com/768bit/vpkg v0.2.7
-	github.com/768bit/vutils v0.1.2
+	github.com/768bit/vutils v0.1.3
 	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
-	github.com/btcsuite/winsvc v1.0.0 // indirect
+	github.com/btcsuite/winsvc v1.0.0
 	github.com/cloudius-systems/capstan v0.4.2-0.20191215223112-bf6c68a40f6d
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/docker/go-units v0.4.0
 	github.com/docker/libcontainer v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.0 // indirect
-	github.com/erikdubbelboer/gspt v0.0.0-20190125194910-e68493906b83 // indirect
+	github.com/erikdubbelboer/gspt v0.0.0-20190125194910-e68493906b83
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/go-openapi/errors v0.19.2
 	github.com/go-openapi/loads v0.19.2
@@ -25,6 +25,7 @@ require (
 	github.com/go-openapi/validate v0.19.2
 	github.com/gobuffalo/envy v1.8.1
 	github.com/gobuffalo/packr/v2 v2.7.1
+	github.com/gofrs/flock v0.7.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
 	github.com/jessevdk/go-flags v1.4.0
@@ -36,7 +37,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.7 // indirect
 	github.com/milosgajdos83/tenus v0.0.0-20190415114537-1f3ed00ae7d8
 	github.com/mistifyio/go-zfs v2.1.1+incompatible
-	github.com/ogier/pflag v0.0.1
+	github.com/ogier/pflag v0.0.1 // indirect
 	github.com/palantir/stacktrace v0.0.0-20161112013806-78658fd2d177
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -46,7 +47,7 @@ require (
 	golang.org/x/sys v0.0.0-20191220220014-0732a990476f
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6 // indirect
 	gopkg.in/hlandau/configurable.v1 v1.0.1 // indirect
-	gopkg.in/hlandau/easyconfig.v1 v1.0.17
+	gopkg.in/hlandau/easyconfig.v1 v1.0.17 // indirect
 	gopkg.in/hlandau/service.v2 v2.0.16
 	gopkg.in/hlandau/svcutils.v1 v1.0.10
 	gopkg.in/yaml.v2 v2.2.7

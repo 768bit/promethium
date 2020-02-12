@@ -23,6 +23,7 @@ type StorageManager struct {
 	imagesCachePath string
 	imagesCache     map[string]*images.ImageCacheFile
 	imagesHashMap   map[string]string
+	exiting         bool
 }
 
 func NewStorageManager(promethiumRootPath string, configs []*config.StorageConfig, uid int, gid int) (*StorageManager, error) {
@@ -69,6 +70,9 @@ func (sm *StorageManager) init(configs []*config.StorageConfig, uid int, gid int
 		sm.GetImages()
 		go func() {
 			for {
+				if sm.exiting {
+					return
+				}
 				time.Sleep(10 * time.Second)
 				sm.writeImagesCache()
 			}
@@ -79,6 +83,14 @@ func (sm *StorageManager) init(configs []*config.StorageConfig, uid int, gid int
 
 	return sm, nil
 
+}
+
+func (sm *StorageManager) Dispose() {
+	sm.exiting = true
+	images.QemuNbd.Dispose()
+	time.Sleep(1 * time.Second)
+	sm.writeImagesCache()
+	println("Storage Manager Disposed")
 }
 
 func (sm *StorageManager) loadImagesCache() {

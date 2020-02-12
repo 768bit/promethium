@@ -7,18 +7,23 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"text/template"
 
 	"github.com/768bit/promethium/lib/networking"
 	"github.com/768bit/vutils"
+	"github.com/fsnotify/fsnotify"
+	"github.com/gofrs/flock"
 )
 
 var IS_NEW_CONFIG bool = false
@@ -56,6 +61,16 @@ func getRootCommandListForPath(installBinPath string) []string {
 	return olist
 }
 
+type PromethiumDaemonConfigUpdateCallbackArea string
+
+const (
+	NetworkingUpdate   PromethiumDaemonConfigUpdateCallbackArea = "networking"
+	StorageUpdate      PromethiumDaemonConfigUpdateCallbackArea = "storage"
+	ClusterNodesUpdate PromethiumDaemonConfigUpdateCallbackArea = "cluster-node"
+)
+
+type PromethiumDaemonConfigUpdateCallback func(area PromethiumDaemonConfigUpdateCallbackArea, scope string, add []string, update []string, remove []string)
+
 type PromethiumDaemonConfig struct {
 	NodeID           string                      `json:"nodeID"`
 	Clusters         []*ClusterConfig            `json:"clusters"`
@@ -73,6 +88,12 @@ type PromethiumDaemonConfig struct {
 	linuxBridgeAvail bool
 	ovsBridgeAvail   bool
 	kvmDevAccess     bool
+	configPath       string
+	watcher          *fsnotify.Watcher
+	fd               *os.File
+	lock             *flock.Flock
+	locked           bool
+	updateCallback   PromethiumDaemonConfigUpdateCallback
 }
 
 type SudoersTemplateData struct {
@@ -529,15 +550,13 @@ func (pdc *PromethiumDaemonConfig) verifySudo() error {
 }
 
 type ClusterConfig struct {
-	ID    string        `json:"id"`
-	Nodes []interface{} `json:"nodes"`
+	ID    string   `json:"id"`
+	Nodes []string `json:"nodes"`
 }
 
 type UnixAPIConfig struct {
 	Enable bool   `json:"enable"`
 	Path   string `json:"path"`
-	User   string `json:"user"`
-	Group  string `json:"group"`
 }
 
 type HttpAPIConfig struct {
@@ -648,6 +667,15 @@ func LoadPromethiumDaemonConfig() (*PromethiumDaemonConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	oconfig.configPath = PROMETHIUM_DAEMON_CONFIG_LOCATION
+	// err = oconfig.Lock()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	err = oconfig.initiateWatcher()
+	if err != nil {
+		return nil, err
+	}
 	return oconfig, nil
 }
 
@@ -664,10 +692,23 @@ func LoadPromethiumDaemonConfigAtPath(configPath string) (*PromethiumDaemonConfi
 	if err != nil {
 		return nil, err
 	}
+	oconfig.configPath = configOutPath
 	// if err := oconfig.validate(true); err != nil {
 	// 	return nil, err
 	// }
+	// err = oconfig.Lock()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	err = oconfig.initiateWatcher()
+	if err != nil {
+		return nil, err
+	}
 	return oconfig, nil
+}
+
+func (pdc *PromethiumDaemonConfig) SetUpdateCallback(callback PromethiumDaemonConfigUpdateCallback) {
+	pdc.updateCallback = callback
 }
 
 func (pdc *PromethiumDaemonConfig) IsNewConfig() bool {
@@ -712,6 +753,421 @@ func (pdc *PromethiumDaemonConfig) DisableHttps() {
 	if pdc.Https != nil {
 		pdc.Https.Enable = false
 	}
+}
+
+func (pdc *PromethiumDaemonConfig) callCallback(area PromethiumDaemonConfigUpdateCallbackArea, scope string, add []string, update []string, remove []string) {
+	if pdc.updateCallback != nil {
+		pdc.updateCallback(area, scope, add, update, remove)
+	}
+}
+
+func (pdc *PromethiumDaemonConfig) tryLoadConf() []error {
+	pdc.locked = true
+	log.Println("Trying to load modified config")
+	errList := []error{}
+	oconfig := &PromethiumDaemonConfig{}
+	err := vutils.Config.GetConfigFromDefaultList("promethium.daemon", CWD, []string{pdc.configPath}, oconfig)
+	if err != nil {
+		pdc.locked = false
+		return append(errList, err)
+	}
+	//now we have a loaded config lets see what needs to be inserted
+	if oconfig.NodeID != pdc.NodeID {
+		errList = append(errList, errors.New("Unable to change NodeID at runtime"))
+	}
+	if oconfig.AppRoot != pdc.AppRoot {
+		errList = append(errList, errors.New("Unable to change AppRoot at runtime"))
+	}
+	if oconfig.User != pdc.User {
+		errList = append(errList, errors.New("Unable to change User at runtime"))
+	}
+	if oconfig.Group != pdc.Group {
+		errList = append(errList, errors.New("Unable to change Group at runtime"))
+	}
+	if oconfig.JailUser != pdc.JailUser {
+		errList = append(errList, errors.New("Unable to change JailUser at runtime"))
+	}
+	if oconfig.JailGroup != pdc.JailGroup {
+		errList = append(errList, errors.New("Unable to change JailGroup at runtime"))
+	}
+	if err := pdc.validateUnixConfig(oconfig.Unix); err != nil {
+		errList = append(errList, err)
+	}
+	if err := pdc.validateHttpConfig(oconfig.Http); err != nil {
+		errList = append(errList, err)
+	}
+	if err := pdc.validateHttpsConfig(oconfig.Https); err != nil {
+		errList = append(errList, err)
+	}
+	//now lets check the rest of the config.. cluster stuff cannot be changed..
+	if err := pdc.validateClusterConfig(oconfig.Clusters); err != nil {
+		errList = append(errList, err)
+	}
+	if err := pdc.validateStorageConfig(oconfig.Storage); err != nil {
+		errList = append(errList, err)
+	}
+	if err := pdc.validateNetworkConfig(oconfig.Networks); err != nil {
+		errList = append(errList, err)
+	}
+	if err := pdc.SaveConfig(); err != nil {
+		errList = append(errList, err)
+	}
+	time.Sleep(2 * time.Second)
+	pdc.locked = false
+	log.Println("Loaded modified config")
+	return errList
+}
+func contains(s []string, searchterm string) (bool, int) {
+	i := sort.SearchStrings(s, searchterm)
+	return i < len(s) && s[i] == searchterm, i
+}
+func storageConfContains(s []*StorageConfig, ID string) (bool, int) {
+	for ind, item := range s {
+		if item.ID == ID {
+			return true, ind
+		}
+	}
+	return false, 0
+}
+func networkConfContains(s []*networking.NetworkConfig, ID string) (bool, int) {
+	for ind, item := range s {
+		if item.ID == ID {
+			return true, ind
+		}
+	}
+	return false, 0
+}
+func removeAtindex(s []string, index int) []string {
+	return append(s[:index], s[index+1:]...)
+}
+func removeStorageConfAtindex(s []*StorageConfig, index int) []*StorageConfig {
+	return append(s[:index], s[index+1:]...)
+}
+func removeNetworkConfAtindex(s []*networking.NetworkConfig, index int) []*networking.NetworkConfig {
+	return append(s[:index], s[index+1:]...)
+}
+func (pdc *PromethiumDaemonConfig) GetClusterConf(clusterID string) *ClusterConfig {
+	if pdc.Clusters == nil || len(pdc.Clusters) == 0 {
+		return nil
+	} else {
+		for _, clusterConf := range pdc.Clusters {
+			if clusterConf.ID == clusterID {
+				return clusterConf
+			}
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) GetStorageConf(id string) (*StorageConfig, int) {
+	if pdc.Storage == nil || len(pdc.Storage) == 0 {
+		return nil, 0
+	} else {
+		for ind, storageConf := range pdc.Storage {
+			if storageConf.ID == id {
+				return storageConf, ind
+			}
+		}
+	}
+	return nil, 0
+}
+func (pdc *PromethiumDaemonConfig) GetNetworkConf(id string) (*networking.NetworkConfig, int) {
+	if pdc.Networks == nil || len(pdc.Networks) == 0 {
+		return nil, 0
+	} else {
+		for ind, networkConf := range pdc.Networks {
+			if networkConf.ID == id {
+				return networkConf, ind
+			}
+		}
+	}
+	return nil, 0
+}
+func (pdc *PromethiumDaemonConfig) validateClusterConfig(newConf []*ClusterConfig) error {
+	if newConf != nil {
+		if pdc.Clusters == nil {
+			return errors.New("Cannot join node to cluster by changing config. Use promethium cluster join or promethium cluster create.")
+		}
+		//iterate the configs...
+		for _, clusterConf := range newConf {
+			if clusterConf == nil {
+				continue
+			}
+			existClusConf := pdc.GetClusterConf(clusterConf.ID)
+			if existClusConf == nil {
+				//doestnt exist
+				return errors.New("Cannot join node to cluster by changing config. Use promethium cluster join.")
+			} else if clusterConf.Nodes != nil && len(clusterConf.Nodes) > 0 {
+				add := []string{}
+				remove := []string{}
+				nodes := []string{}
+				for _, node := range clusterConf.Nodes {
+					if xist, _ := contains(existClusConf.Nodes, node); !xist {
+						add = append(add, node)
+					}
+					nodes = append(nodes, node)
+				}
+
+				for _, node := range existClusConf.Nodes {
+					if xist, _ := contains(clusterConf.Nodes, node); !xist {
+						remove = append(remove, node)
+					} else {
+						nodes = append(nodes, node)
+					}
+				}
+				existClusConf.Nodes = nodes
+				if len(add) > 0 || len(remove) > 0 {
+					pdc.callCallback(ClusterNodesUpdate, clusterConf.ID, add, nil, remove)
+				}
+			}
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) validateStorageConfig(newConf []*StorageConfig) error {
+	if newConf != nil {
+		if pdc.Storage == nil {
+			return errors.New("Unable to set new Storage Config at runtime.")
+		}
+		//iterate the configs...
+		add := []string{}
+		update := []string{}
+		remove := []string{}
+		removeInds := []int{}
+		for _, storeConf := range newConf {
+			if storeConf == nil {
+				continue
+			}
+			existStoreConf, _ := pdc.GetStorageConf(storeConf.ID)
+			if existStoreConf == nil {
+				//doestnt exist
+				add = append(add, storeConf.ID)
+				pdc.Storage = append(pdc.Storage, storeConf)
+			} else {
+				//it exists.. is it to be updated?
+				if existStoreConf.Driver != storeConf.Driver {
+					return errors.New("Unable to change Storage driver at runtime.")
+				} else {
+					existStoreConf.Config = storeConf.Config
+					update = append(update, existStoreConf.ID)
+				}
+			}
+		}
+		for _, storeConf := range pdc.Storage {
+			if storeConf == nil {
+				continue
+			}
+			if xists, index := storageConfContains(newConf, storeConf.ID); !xists {
+				remove = append(remove, storeConf.ID)
+				removeInds = append(removeInds, index)
+			}
+		}
+		if len(removeInds) > 0 {
+			for _, ind := range removeInds {
+				removeStorageConfAtindex(pdc.Storage, ind)
+			}
+		}
+		if len(add) > 0 || len(update) > 0 || len(remove) > 0 {
+			pdc.callCallback(StorageUpdate, "", add, update, remove)
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) validateNetworkConfig(newConf []*networking.NetworkConfig) error {
+	if newConf != nil {
+		if pdc.Networks == nil {
+			return errors.New("Unable to set new Network Config at runtime.")
+		}
+		//iterate the configs...
+		add := []string{}
+		update := []string{}
+		remove := []string{}
+		removeInds := []int{}
+		for _, netConf := range newConf {
+			if netConf == nil {
+				continue
+			}
+			existNetConf, _ := pdc.GetNetworkConf(netConf.ID)
+			if existNetConf == nil {
+				//doestnt exist
+				add = append(add, netConf.ID)
+				pdc.Networks = append(pdc.Networks, netConf)
+			} else {
+				//it exists.. is it to be updated?
+				if existNetConf.Type != netConf.Type {
+					return errors.New("Unable to change Network driver/type at runtime.")
+				} else {
+					if existNetConf.Enabled != netConf.Enabled {
+						existNetConf.Enabled = netConf.Enabled
+					}
+					if existNetConf.Name != netConf.Name {
+						existNetConf.Name = netConf.Name
+					}
+					if existNetConf.MasterInterface != netConf.MasterInterface {
+						existNetConf.MasterInterface = netConf.MasterInterface
+					}
+					existNetConf.IPV4 = netConf.IPV4
+					existNetConf.IPV6 = netConf.IPV6
+					update = append(update, netConf.ID)
+				}
+			}
+		}
+		for _, netConf := range pdc.Networks {
+			if netConf == nil {
+				continue
+			}
+			if xists, index := networkConfContains(newConf, netConf.ID); !xists {
+				remove = append(remove, netConf.ID)
+				removeInds = append(removeInds, index)
+			}
+		}
+		if len(removeInds) > 0 {
+			for _, ind := range removeInds {
+				removeNetworkConfAtindex(pdc.Networks, ind)
+			}
+		}
+		if len(add) > 0 || len(update) > 0 || len(remove) > 0 {
+			pdc.callCallback(NetworkingUpdate, "", add, update, remove)
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) validateHttpConfig(newConf *HttpAPIConfig) error {
+	if newConf != nil {
+		currConf := pdc.Http
+		if currConf.Enable && !newConf.Enable {
+			return errors.New("Unable to disable HTTP endpoint at runtime")
+		} else if !currConf.Enable && newConf.Enable {
+			return errors.New("Unable to enable HTTP endpoint at runtime")
+		} else if currConf.BindAddress != newConf.BindAddress {
+			return errors.New("Unable to change HTTP endpoint BindAddress at runtime")
+		} else if currConf.Port != newConf.Port {
+			return errors.New("Unable to change HTTP endpoint Port at runtime")
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) validateHttpsConfig(newConf *HttpsAPIConfig) error {
+	if newConf != nil {
+		currConf := pdc.Https
+		if currConf.Enable && !newConf.Enable {
+			return errors.New("Unable to disable HTTPS endpoint at runtime")
+		} else if !currConf.Enable && newConf.Enable {
+			return errors.New("Unable to enable HTTPS endpoint at runtime")
+		} else if currConf.BindAddress != newConf.BindAddress {
+			return errors.New("Unable to change HTTPS endpoint BindAddress at runtime")
+		} else if currConf.Port != newConf.Port {
+			return errors.New("Unable to change HTTPS endpoint Port at runtime")
+		} else if currConf.PrivateKey != newConf.PrivateKey {
+			return errors.New("Unable to change HTTPS endpoint PrivateKey at runtime")
+		} else if currConf.Certificate != newConf.Certificate {
+			return errors.New("Unable to change HTTPS endpoint Certificate at runtime")
+		} else if currConf.ClientCertPolicy != newConf.ClientCertPolicy {
+			return errors.New("Unable to change HTTPS endpoint ClientCertPolicy at runtime")
+		} else if newConf.ClientCertCACerts != nil && len(newConf.ClientCertCACerts) > 0 && currConf.ClientCertCACerts != nil && len(currConf.ClientCertCACerts) > 0 {
+			if newConf.ClientCertCACerts[0] != currConf.ClientCertCACerts[0] {
+				return errors.New("Unable to change HTTPS endpoint ClientCertCACerts at runtime")
+			}
+		}
+	}
+	return nil
+}
+func (pdc *PromethiumDaemonConfig) validateUnixConfig(newConf *UnixAPIConfig) error {
+	if newConf != nil {
+		currConf := pdc.Unix
+		if currConf.Enable && !newConf.Enable {
+			return errors.New("Unable to disable UNIX endpoint at runtime")
+		} else if !currConf.Enable && newConf.Enable {
+			return errors.New("Unable to enable UNIX endpoint at runtime")
+		}
+	}
+	return nil
+}
+
+func (pdc *PromethiumDaemonConfig) initiateWatcher() error {
+	var err error = nil
+	pdc.watcher, err = fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	go func() {
+		for {
+			select {
+			case event, ok := <-pdc.watcher.Events:
+				if !ok {
+					return
+				}
+				log.Println("event:", event)
+				if !pdc.locked && event.Op&fsnotify.Write == fsnotify.Write {
+					log.Println("modified file:", event.Name)
+					elist := pdc.tryLoadConf()
+					if len(elist) > 0 {
+						for _, e := range elist {
+							log.Println(e.Error())
+						}
+					}
+				}
+			case err, ok := <-pdc.watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+	return pdc.watcher.Add(pdc.configPath)
+
+}
+
+var ConfigAlreadyLockedErr = errors.New("The config file is already locked")
+var ConfigNotLockedErr = errors.New("The config file is not currently")
+var ConfigUnableToLockErr = errors.New("The config file cannot be locked")
+
+func (pdc *PromethiumDaemonConfig) Lock() error {
+	if pdc.locked {
+		return ConfigAlreadyLockedErr
+	}
+	var err error = nil
+	// pdc.fd, err = os.Open(pdc.configPath)
+	// if err != nil {
+	// 	return err
+	// }
+	pdc.lock = flock.New(pdc.configPath)
+	err = pdc.lock.Lock()
+	if err != nil {
+		//pdc.fd.Close()
+		return err
+	}
+	println("obtained config lock", pdc.configPath)
+	pdc.locked = true
+	return nil
+}
+
+func (pdc *PromethiumDaemonConfig) Unlock() error {
+	if !pdc.locked || pdc.lock == nil {
+		pdc.locked = false
+		return ConfigNotLockedErr
+	}
+	pdc.lock.Unlock()
+	//pdc.fd.Close()
+	pdc.locked = false
+	println("released config lock", pdc.configPath)
+	return nil
+}
+
+func (pdc *PromethiumDaemonConfig) SaveConfig() error {
+	// if pdc.locked {
+	// 	pdc.Unlock()
+	// }
+	err, _ := vutils.Config.TrySaveConfig(CWD, []string{pdc.configPath}, pdc)
+	if err != nil {
+		err = pdc.Lock()
+		if err != nil {
+			println(err.Error())
+		}
+		return err
+	}
+	//return pdc.Lock()
+	return nil
 }
 
 func generateNewPromethiumDaemonConfig() error {
@@ -768,7 +1224,9 @@ func NewPromethiumDaemonConfig(configPath string, dataPath string, socketPath st
 		return err
 	}
 
-	err, _ := vutils.Config.TrySaveConfig(CWD, []string{configOutPath}, oconfig)
+	oconfig.configPath = configOutPath
+
+	err := oconfig.SaveConfig()
 	if err != nil {
 		//return err
 		return err
@@ -777,6 +1235,7 @@ func NewPromethiumDaemonConfig(configPath string, dataPath string, socketPath st
 	//now create the default folder structure...
 
 	//
+	return oconfig.initiateWatcher()
 
-	return err
+	//return err
 }

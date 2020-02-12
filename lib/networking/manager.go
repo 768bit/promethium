@@ -39,6 +39,8 @@ func (mgr *Manager) initBridge(config *NetworkConfig) error {
 			return err
 		}
 		mgr.bridges[config.ID] = br
+	case OvsBridgeDriver:
+		break
 	}
 	return nil
 }
@@ -70,6 +72,8 @@ func (mgr *Manager) GetPhysicalInterfaces() ([]*PhysicalInterface, error) {
 }
 
 func (mgr *Manager) CreateBridge(bridgeType BridgeDriver) (NetworkBridge, error) {
+	//when creating a bridge - we need to update the config appropriately...
+
 	return nil, nil
 }
 
